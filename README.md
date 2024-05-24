@@ -4,7 +4,8 @@
 ## test application for Texas Holdem game Text version
 
 ### 현재 디렉토리 구조
-.  
+
+./testapp  
 ├── main.py  
 ├── database  
 │   └── connection.py  
