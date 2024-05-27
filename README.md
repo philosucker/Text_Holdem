@@ -5,8 +5,14 @@
 
 ### 현재 디렉토리 구조
 
-./testapp  
+./app  
 ├── main.py  
+├── mongod.conf  
+├── .env  
+├── auth  
+│   └── authenticate.py  
+│   └── hash_password.py  
+│   └── jwt_handler.py  
 ├── database  
 │   └── connection.py  
 │   └── crud.py  
@@ -26,4 +32,6 @@
   - 클라이언트 측에서 필요한 일부 기능 구현
     - 유저 등록, 유저 로그인, 유저 이벤트 생성/변경/삭제,조회
 - 05.26.2024  
-  - pytest 완료  
+  - pytest 완료
+- 05.27.2024  
+  - 게임 루프 개발 시작
