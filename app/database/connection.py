@@ -4,7 +4,11 @@ from models.events import Event
 from models.users import User  
 from motor.motor_asyncio import AsyncIOMotorClient 
 from pydantic_settings import BaseSettings 
- 
+from dotenv import load_dotenv
+import os
+
+# .env 파일 로드
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../.env'))
 
 class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None
