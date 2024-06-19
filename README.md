@@ -1,7 +1,7 @@
 # Text_Holdem
 
 
-## : application for Texas Holdem game Text version
+## : Description: A text-based application for playing Texas Holdem
 
 ### 프로젝트 목표
 1. 온라인에서 최소 6인 이상이 함께 멀티 플레이가 가능한 Texas Holdem 게임 애플리케이션 개발  
@@ -27,8 +27,58 @@
    2) LLM API를 활용해 홀덤을 플레이하는 LLM 모델 개발
    3) 고정확률모델과 LLM 모델을 홀덤 애플리케이션에 넣어 강화학습을 위한 데이터 수집
 
+### Project Objectives
+1. Develop a Texas Holdem game application that supports multiplayer with at least 6 players online.  
+2. Train AI agents capable of playing Texas Holdem and integrate them into the application.
+     
+#### Project Background
+1. The project aims to provide more people with an accessible and enjoyable way to experience Texas Holdem.  
+   - Characteristics of Existing Holdem Applications  
+      1) High Risk of Gambling Addiction: Often perceived as mere gambling.  
+      2) High Entry Barrier: The rules are not easy to learn.  
+      3) Lack of Solo Play Options: Requires at least three players; there are no games yet that include AI players.
+         
+2. Texas Holdem presents a valuable opportunity for development using Large Language Models (LLM) and Deep Reinforcement Learning (DRL).  
+   - Texas Holdem is an imperfect information game with strategic simulation elements:  
+      1) Real-Time Strategy Games: Notable Stargraft pro-gamers like Hong Jin-ho and Lim Yo-hwan have transitioned to professional Holdem players as of June 2024.  
+      2) Turn-Based Strategy Games: Professional Go player Lee Sedol has also become a Holdem player as of June 2024.  
+   - Developing AI capable of making optimal decisions and bluffing with limited information requires advanced techniques in multimodal input processing (text, images, video, sound).  
+  
+#### Project Plan
+1. Develop a Texas Holdem Game Application: Create an application with a sleek and user-friendly UI (see progress below).  
+2. Prepare for AI Agent Development:  
+1) Develop a fixed-probability model for playing Holdem based on arbitrary probability distributions.  
+2) Utilize LLM APIs to create an LLM model for playing Holdem.  
+3) Integrate the fixed-probability and LLM models into the Holdem application to collect data for reinforcement learning.  
+
+#### Progress
+  
+04.24.2024   
+   - Began studying the rules of Texas Holdem. 
+    
+05.14.2024   
+   - Started learning FastAPI for backend development  
+   - Began developing the backend for the Holdem game.  
+  
+   05.24.2024  
+      - Completed integration of FastAPI application with MongoDB.  
+   05.26.2024  
+      - Completed pytest.  
+        
+06.04.2024  
+- Fully mastered the rules of Texas Holdem.  
    
-### 현재 디렉토리 구조
+06.08.2024  
+   - Designed the game architecture.  
+   - Conceptualized the core logic for the Holdem game application.  
+     
+06.10.2024  
+- Started learning Unity.  
+  
+06.19.2024  
+![홀덤-2](https://github.com/philosucker/Text_Holdem/assets/65852355/f6e62c2d-26bc-4b8f-b940-0d1dc0f67742)
+
+### Current Directory Structure
 
 ./app  
 ├── main.py  
@@ -74,5 +124,4 @@
 - 06.10.2024
   - Unity 공부 시작
     
-- 06.19.2024
-![홀덤-2](https://github.com/philosucker/Text_Holdem/assets/65852355/f6e62c2d-26bc-4b8f-b940-0d1dc0f67742)
+
