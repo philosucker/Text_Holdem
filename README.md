@@ -46,13 +46,14 @@
 - Fully mastered the rules of Texas Holdem.  
    
 06.08.2024  
-   - Designed the game architecture.  
+   - Started Designing the game architecture.  
    - Conceptualized the core logic for the Holdem game application.  
      
 06.10.2024  
 - Started learning Unity.  
   
 06.19.2024  
+- Architecture design completed  
 ![홀덤-2](https://github.com/philosucker/Text_Holdem/assets/65852355/9219939e-fff9-4f3f-885f-d25b718339c0)
 
 ### Current Directory Structure
