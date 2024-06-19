@@ -53,14 +53,15 @@
 - Started learning Unity.  
   
 06.19.2024  
-![홀덤-2](https://github.com/philosucker/Text_Holdem/assets/65852355/f6e62c2d-26bc-4b8f-b940-0d1dc0f67742)
+![홀덤-2](https://github.com/philosucker/Text_Holdem/assets/65852355/9219939e-fff9-4f3f-885f-d25b718339c0)
 
 ### Current Directory Structure
 
 ./app  
 ├── main.py  
 ├── mongod.conf  
-├── .env  
+├── .env
+  
 ├── auth  
 │   └── authenticate.py  
 │   └── hash_password.py  
