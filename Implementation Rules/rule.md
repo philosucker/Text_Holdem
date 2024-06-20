@@ -475,7 +475,7 @@ pass
 # (now)  
 새로운 게임방에 참여한 사람들은 모든 포지션에서 플레이 가능(랜덤 배정) 
 
-### (later)
+    (later)
     기존 게임방에 참여해 대기하는 사람은 SB, Button 포지션을 제외하고 랜덤 배정 
 
 # (now)
@@ -750,7 +750,7 @@ pass
     1100은 minimum raise 1400의 50%인 700을 넘기므로 
     UTG는 300을 더 내서 2800 레이즈를 맞춰야 한다.
  
-# (구현)
+# (now)
     현재 플레이어가 레이즈 가능한지 보려면
     직전 total bet + minimum raise 이상의 스택이 현재플레이어에게 있는지 확인해야한다.
     이상이면 레이즈버튼 활성화
@@ -881,9 +881,8 @@ betting re-open을 구현하려면
     다시 BB차례가 되기 전까지 공격형 액션이 하나도 없었던 경우에만. 
     BB에게 자기자신의 오픈에 대해 레이즈 할 수 있는 기회 제공. 
     여기서 minimum raise는 open bet
- 
-(later)  
 
+    (later)  
     51: Binding Declarations / Undercalls in Turn 
      
     어떤 라운드에서건 opening bet이나 헤즈업 상황에서 나온 undercall은 full call이 되어야 한다.
@@ -908,8 +907,7 @@ betting re-open을 구현하려면
 
 
 --------------------------------------------------------------------------------
-(later)  
- 
+    (later)  
     Rule 10: Breaking Tables, 2-Step Random Process. 
     A 2-step random or “double-blind” process assures that there is no favoritism in distributing new seat assignments. An example of one such process: 1) show players at the breaking table the new seat cards then scramble the cards face down and form a stack; 2) the dealer then deals one playing card face up to each player. The seat cards are then dealt out with the first seat card going to the player with the highest playing card by suit showing.
  
@@ -1049,7 +1047,7 @@ betting re-open을 구현하려면
  
     rule 29: Calling for a Clock 
 
-    (now)
+# (now)
     액션 타임은 기본 15초.
 
     (later)
