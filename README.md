@@ -26,7 +26,16 @@
 2. Prepare for AI Agent Development:  
 1) Develop a fixed-probability model for playing Holdem based on arbitrary probability distributions.  
 2) Utilize LLM APIs to create an LLM model for playing Holdem.  
-3) Integrate the fixed-probability and LLM models into the Holdem application to collect data for reinforcement learning.  
+3) Integrate the fixed-probability and LLM models into the Holdem application to collect data for reinforcement learning.
+
+#### Requirement Skills
+1. Python : FastAPI, AsyncIO (for backend)
+2. C# and Design : Unity 2022 (for smartphone application)
+3. Networking (websocket etc.)
+4. Docker (for distribution)
+
+#### implamentation rule  
+I made reference : [Implementation Rules/rule.md](https://github.com/philosucker/Text_Holdem/blob/main/Implementation%20Rules/rule.md)
 
 #### Progress
   
