@@ -19,7 +19,7 @@ pass
         b. 기존 게임방에 이어서 플레이 하는 유저의 포지션 변경. 포지션 순서가 시계방향으로 한칸씩 이동
         c. 기존 게임방에 참여 대기한 유저는 SB, 딜러를 제외한 포지션 배정
     
-    3) 유저별 stack 설정 : manager 인스턴스에서 가져옴
+    2) 유저별 stack 설정 : manager 인스턴스에서 가져옴
 
     4) 카드 셔플 및 딜링 : 랜덤, 각 유저의 스타팅 카드 정보 따로 기록
     
@@ -120,6 +120,7 @@ pass
             스트레이트플러쉬끼리 붙는 경우
             1. 내림차순 정렬
             2. 숫자가 높은 카드가 있는 쪽이 승
+
 ### 7. End
     팟 분배
 
@@ -235,15 +236,14 @@ pass
 ### raise : raise는 무조건 자기 오른쪽 편에 bet, raise, all-in 이 있었어야만 할 수 있다. 
     (액션 조건 콜과 같음)
     
-    프리플롭에서는 자기 오른쪽 편에 bet이 없었어도 raise 할 수 있다. (예외 조건)
-        레이즈/리레이즈의 최소레이즈는 
-        다른 플레이어의 직전 풀벳 또는 직전 풀레이즈의 최소레이즈와 같거나 그보다 커야 한다.
+    프리플롭에서는BB가 최초 bet을 한 것으로 처리한다. (예외 조건)
         
     이전의 올인이나 multiple short all-in 들의 누적합이 
     the largest prior full bet이나 raise에 도달하면
         이미 행동을 했고 아직 다른 플레이어에 의한 full bet 이나 full raise에 
         직면하지 않은 플레이어들에게 betting을 re-open 해준다
         그때 minimim raise는 the largest prior full bet이나 raise 액수와 같다.
+        (별다른 고민 안해도 현재 구현에서 자동으로 구현된 듯)
      
     프리플롭에서 if 조건1 and 조건2   또는  if 조건5 and 조건6 또는 if 조건7 and 조건8
         (조건1) 자기 차례일 때, 자기 오른쪽 편에 full raise가 없었고
@@ -273,11 +273,7 @@ pass
     1. 라이브 플레이어들의 액션이
       1) full-bet 이었는지 (bet 버튼이 활성화돼서 눌렀다는건 그 bet이 full-bet이라는걸 의미)
       2) full-raise 였는지 (raise 버튼이 활성화돼서 눌렀다는 건 그 raise가 full-raise라는걸 의미)
-      3) all- in 이었는지 (all-in 버튼은 스택이 1 이상이면 무조건 활성화되므로, 
-         all-in 버튼을 눌렀다면 
-            그 all-in이 full-bet인지, full-raise인지, call인지 short인지 판단 필요, 
-            short였다면 
-            몇번째 short였는지, 해당 short에서 increment 된 금액 기억 필요)
+      3) all- in 이었는지
       4) 직전 total-bet, 전전 total-bet, LPFB
       5) call 인지
       6) fold인지
@@ -410,6 +406,38 @@ pass
     액션큐를 현재 플레이어 기준으로 새로 만들지 결정 (bet, raise, all-in 시)
     메인 팟, 사이드 팟을 만들고 각 팟에 지분이 있는 플레이어를 관리
 
+
+start_order = [SB, BB, UTG, HJ, CO, D]
+action_queue = [SB]
+SB check : actioned_queue = [SB]
+start_order = [UTG, HJ, CO, D]
+action_queue = [BB]
+BB check  : actioned_queue = [SB, BB]
+start_order = [HJ, CO, D]
+action_queue = [UTG]
+UTG bet : actioned_queue = [SB, BB], start_order.append(actioned_queue)
+start_order = [HJ, CO, D, SB, BB]
+actioned_queue = [UTG]
+HJ  call : actioned_queue = [UTG, HJ]
+start_order = [D, SB, BB]
+action_queue = [CO]
+CO  fold : fold_user = [CO]
+start_order = [SB, BB]
+action_queue = [D]
+D all_in : all_in_user = [D], start_order.append(actioned_queue) 
+start_order = [SB, BB, UTG, HJ]
+actioned_queue = []
+fold_user = [CO]
+all_in_user = [D]
+action_queue = [SB]
+start_order = [BB, UTG, HJ]
+SB, UTG, HJ call
+actioned_queue  = [BB, UTG, HJ]
+
+
+메인 팟, 사이드 팟을 만들고 각 팟에 지분이 있는 플레이어를 관리
+
+
 ### 액션 큐(라이브 플레이어를 요소로 가지는 덱) 
     활성화된 플레이어 숫자를 매 플레이어 차례마다 확인한다. 
     플레이어들은 공격형 액션을 하면 공격플래그를 만들고, 수비형 액션을 하면 수비플래그를 만든다.
@@ -477,10 +505,7 @@ pass
 # (now)
     팟 만드는 로직으로 스트릿 종료되는 조건을 검증한다.
     스트릿가 종료되려면 폴드를 제외하고 남은 플레이어들의 최종 베팅금액이 모두 일치해야 한다.
-    (진행선에서 해당 스트릿의 최종 활성화 플레이어 수로 해당 스트릿의 최종 팟을 나누면 
-    각 플레이어의 최종 베팅금액이 나와야 하고,
-    이 금액이 실제로 각 플레이어들의 해당 스트릿 최종 베팅 금액과 일치하는 지 검증)
-        이 검증 로직이 옳지 않은 경우가 있을 수 있다. short 올인이 일어났던 경우.
+
 
  
  
@@ -518,13 +543,13 @@ pass
     A: A raise must be at least equal to the largest prior full bet or raise of the current betting round. 
      
     raise가 가능한 조건 하에 raise를 하려고 할 때, 
-    (최소)raise 금액은
+    최소 raise 금액은 (i.e. 직전 유효벳,  또는 직전 유효레이즈에 대해 콜을 한 다음 레이즈 해야 하는 최소 액수는)
         현재 스트릿에서 
         앞서 있었던 가장 큰  full bet 금액 이상 또는 
         앞서 있었던 가장 큰 full raise 금액 이상 이다.
             여기서 'full bet' 또는 'full raise' 의 full 의 의미는 
                 유효한 (valid, legal) 베팅 또는 레이즈를 의미한다.
-            여기서 '가장 큰 full bet 금액 또는 가장 큰 raise 금액' (이하 LPFB)은 
+            여기서 '앞서 있었던 가장 큰 full bet 금액 또는 가장 큰 raise 금액' (이하 LPFB)은 
                 total bet이 아닌 last legal increment을 가리킨다. 
                 (last legal increment  = 직전 total bet - 전전 total bet)
     
@@ -534,7 +559,7 @@ pass
         BB 이상의 액수를 레이즈
 
         이후 레이즈는, 직전 total bet을 콜하고, 
-            직전 total bet-전전 total bet 이상의 액수를 레이즈  
+            직전 total bet-전전 total bet 이상의 액수(LPFB)를 레이즈  
     
     따라서 the largest prior full bet or raise = minimum raise = last legal increment
     
@@ -546,13 +571,20 @@ pass
     SB 1000 콜 (스택 -500) (이 경우 SB의 콜은 BB에 대한 콜임, UTG의 올인/언더콜은 자동으로 콜한게 됨)
     
 # (now)
-    플레이어의 스택 >= the largest prior full bet(raise) 이면 
+    프로토 타입은 1-1 로 구현하므로
+    플레이어의 스택 사이즈를 기준으로 
+    콜 금액 + LPFB <= 플레이어의 스택 사이즈이면 
     call/raise/all-in 버튼을 활성화 시킨다.
     이때 raise 스크롤의 min value 는 the largest prior full bet(raise) 이다.
+    콜 금액 <= 플레이어의 스택 사이즈 < 콜 금액 + LPFB 이면
+    call/ all-in 버튼만 활성화 시킨다. raise 버튼 비활성화
+   플레이어의 스택 사이즈 <  콜 금액 이면
+    all-in 버튼만 활성화시킨다. call 버튼도 비활성화
      
     A player who raises 50% or more of the largest prior bet but 
     less than a minimum raise must make a full minimum raise. 
      
+    (later)
     50% 룰과 최소 레이즈 (minimum raise) : 
         현재 raise 액수(현재 레이즈 액수(total bet) - 직전 total bet)가
         현재 스트릿에서 앞서 있었던 가장 큰 full bet의 50% 이상 ~ full bet 미만 또는 
@@ -562,29 +594,25 @@ pass
             현재 스트릿에서 앞서 있었던 가장 큰 full bet 액수만큼 또는 
             앞서 있었던 full raise 금액 내지 그 액수 만큼의 raise 행위를 말한다.
      
-# (now)
-    the largest prior full bet(raise) 의 50%  <= 플레이어의 스택 < the largest prior full bet(raise) 이면
+# (later)
+    the largest prior full bet(raise) 의 50%  <= 레이즈 액수  < the largest prior full bet(raise) 이면
         minimum raise를 할 수 없으므로 
         all-in/fold 버튼만 활성화시킨다. 
-            (이 경우 all-in 시 not full raise 플래그를 붙여야 한다. 
-            즉 콜로 간주한다. 필요할까? 고민 필요)
      
     If less than 50% it is a call unless “raise” is first declared or the player is all-in (Rule 45-B).
     Declaring an amount or pushing out the same amount of chips is treated the same (Rule 40-C). 
      
     50% 미만이면 모두 콜로 판정한다. (예외 : 던질 때 먼저 레이즈라고 말했거나, 올인한 경우)
-# (now)
-    플레이어의 스택 < the largest prior full bet(raise) 의 50% 이면, 
-    바로 위의 경우에 포함되므로
+# (later)
+ 레이즈 액수  < the largest prior full bet(raise) 의 50% 이면, 
         call/raise 버튼은 비활성화, all-in/fold 버튼만 활성화 시켜야 한다 
-        (이 경우 all-in 시 not full raise 플래그를 붙여야 한다. 
-        즉 콜로 간주한다. 필요할까? 고민 필요)
      
     B: Without other clarifying information, declaring raise and an amount is the total bet.
     Ex: A opens for 2000, B declares “Raise, eight thousand.” The total bet is 8000.
     
 # (now)
-    특별히 따로 언급하지 않는다면, 레이즈를 선언할 때 언급하는 금액은 total bet을 의미한다 
+    특별히 따로 언급하지 않는다면, 레이즈를 선언할 때 언급하는 금액은 total bet을 의미한다
+    (클라이언트 쪽에서 구현)
      
 # (now)   
     raise를 누르면
@@ -592,6 +620,7 @@ pass
         스크롤 min value인 the largest prior full bet(raise) 부터 
         max value 스택 총액까지 선택할 수 있다.
         이때 max value까지 올리면 자동으로 all-in 처리 된다.
+        (클라이언트쪽에서 구현)
 
 --------------------------------------
 # Illustration Addendum
@@ -748,7 +777,7 @@ pass
  
 # (now)
     현재 플레이어가 레이즈 가능한지 보려면
-    직전 total bet + minimum raise 이상의 스택이 현재플레이어에게 있는지 확인해야한다.
+    직전 total bet (전전 total bet + LPFB) 이상의 스택이 현재플레이어에게 있는지 확인해야한다.
     이상이면 레이즈버튼 활성화
  
 ### example 4-a.
@@ -869,7 +898,7 @@ betting re-open을 구현하려면
     모든 플레이어의 매순간 액션과 베팅사이즈를 기록해두었다가 short all in이 일어 났을 때
     누적 합이 the largest prior bet/raise 이상이 되면, 
     이미 액션을 한 플레이어에 한해서 full raise를 직면하는 경우 배팅 버튼을 다시 활성화시켜준다.
-
+    (별다른 고민 안해도 현재 구현 상에서 자동으로 구현되는 듯)
 # (now)
 옵션은 프리플롭에서만. BB에게만.   
 
@@ -877,6 +906,7 @@ betting re-open을 구현하려면
     다시 BB차례가 되기 전까지 공격형 액션이 하나도 없었던 경우에만. 
     BB에게 자기자신의 오픈에 대해 레이즈 할 수 있는 기회 제공. 
     여기서 minimum raise는 open bet
+    (별다른 고민 안해도 현재 구현 상에서 자동으로 구현되는 듯)
 
     (later)  
     51: Binding Declarations / Undercalls in Turn 
@@ -923,7 +953,6 @@ betting re-open을 구현하려면
     rule 15: Showdown and Discarding Irregularities (rule 18 참고)
     어떤 플레이어가 winning hand를 만드는 스타팅 카드 한장을 자발적으로 테이블링하면
     딜러는 그 플레이어의 모든 카드를 테이블링 하도록 권고해야한다. 거절하면 플로어를 호출해야 한다.
- 
 
     모든 종류의 쇼다운에서 플레이어가 자신의 스타팅 카드를 오픈해야하는 경우엔 두장 모두 오픈해야한다.
     플레이어는 올인이 아닌 쇼다운시 자발적으로 자신의 오픈할 수 있고, 
@@ -932,15 +961,14 @@ betting re-open을 구현하려면
 # (now) 
     rule 16: Face Up for All-Ins 
         올인 플레이어가 발생하면, 
-        그 핸드에서 다른 모든 플레이어의 베팅 액션이 끝난 후
-        (i.e. 스택이 충분한 유저가 2명 미만이 되어 더이상 베팅액션 기회를 계산하는 게 의미없을경우. 
-        바꿔말하면 2명이상의 유저가 스택이 충분하다면 
-        스트릿를 진행한다. 
-        스택이 충분하다는 판단의 기준은 어떻게 잡을 것인가? 
-        올인 유저 발생 후, 올인금액+LPFB <= stack size ?
-        모든 플레이어의 핸드는 테이블링된다. 
-        (모든 플레이어가 동시에 스타팅 카드를 오픈하고 쇼다운을 한다?)
+        그 핸드에서 다른 모든 플레이어의 베팅 액션이 끝났을 때
+        i.e. 스택이 충분한 유저가 2명 미만이 되어 더이상 베팅액션 기회를 계산하는 게 의미 없을 경우,
+        핸드를 종료하고 모든 유저들의 스타팅 핸드를 테이블링 한 후, 쇼다운을 한다 (테이블에 남은 카드들을 오픈한다)
+        (later)
         이때 모든 라이브 플레이어들은 머킹은 불가능 하다.
+        바꿔 말해서 2명이상의 유저가 스택이 충분하다면
+        스트릿를 진행한다. 
+        (스택이 충분하다는 판단의 기준은 어떻게 잡을 것인가?) 
  
     예시
     1.
@@ -977,7 +1005,7 @@ betting re-open을 구현하려면
     until the side pot between B and C is awarded
     A가 먹을 못하게 하려고. 올인했으니까
 
-# (now)
+
     rule 17: Non All-In Showdowns and Showdown Order (rule 18참고)
         올인이 아닌 쇼다운에서, 플레이어가 카드를 자발적으로 오픈하거나 버리지 않는 경우
         핸드 공개 순서를 강제할 수 있다. 
@@ -985,7 +1013,7 @@ betting re-open을 구현하려면
             마지막 어그레서의 카드부터 딜링방향으로 오픈
         마지막 스트릿에서 베팅이 없었던 경우, 
             가장 먼저 액션을 할 차례였던 플레이어부터 딜링 방향으로 테이블링
-        
+
         올인이 아닌 쇼다운에서 한명을 제외하고 나머지 모든 플레이어가 먹을 한경우, 
         먹을 하지 않은 한 명의 플레이어가 승리하며 이때 카드를 오픈하지 않는다
  
@@ -1064,6 +1092,7 @@ betting re-open을 구현하려면
         구현시, 
         live hands 를 갖고 있는 플레이어가 게임 도중 무단이탈 2회 이상 하면 페널티를 준다.
          쇼다운시 테이블링 의무가 있는 플레이어의 무단이탈은 1회부터 페널티를 주고, 누적 페널티를 적용한다.  
+
     (later)
     rule 33: Dodging Blinds
         구현시,
@@ -1085,12 +1114,4 @@ betting re-open을 구현하려면
         프리플랍에서 헤즈업 : SB가 버튼 겸한다. SB가 먼저 액션한다.
         플랍, 턴, 리버에서 헤즈업 : SB가 버튼 겸한다. SB가 마지막에 액션한다
         헤즈업에서 한플레이어가 그 핸드에서 연속으로 BB가 되지 않도록 버튼을 조정할 수 있다.
- 
- 
- 
- 
- 
- 
- 
- 
  
