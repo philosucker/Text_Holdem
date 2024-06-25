@@ -406,36 +406,36 @@ pass
     액션큐를 현재 플레이어 기준으로 새로 만들지 결정 (bet, raise, all-in 시)
     메인 팟, 사이드 팟을 만들고 각 팟에 지분이 있는 플레이어를 관리
 
+    
+    start_order = [SB, BB, UTG, HJ, CO, D]
+    action_queue = [SB]
+        SB check : actioned_queue = [SB]
+    start_order = [UTG, HJ, CO, D]
+    action_queue = [BB]
+        BB check  : actioned_queue = [SB, BB]
+    start_order = [HJ, CO, D]
+    action_queue = [UTG]
+        UTG bet : actioned_queue = [SB, BB], start_order.append(actioned_queue)
+    start_order = [HJ, CO, D, SB, BB]
+    actioned_queue = [UTG]
+        HJ  call : actioned_queue = [UTG, HJ]
+    start_order = [D, SB, BB]
+    action_queue = [CO]
+        CO  fold : fold_user = [CO]
+    start_order = [SB, BB]
+    action_queue = [D]
+        D all_in : all_in_user = [D], start_order.append(actioned_queue) 
+    start_order = [SB, BB, UTG, HJ]
+    actioned_queue = []
+    fold_user = [CO]
+    all_in_user = [D]
+    action_queue = [SB]
+    start_order = [BB, UTG, HJ]
+        SB, UTG, HJ call
+    actioned_queue  = [BB, UTG, HJ]
 
-start_order = [SB, BB, UTG, HJ, CO, D]
-action_queue = [SB]
-SB check : actioned_queue = [SB]
-start_order = [UTG, HJ, CO, D]
-action_queue = [BB]
-BB check  : actioned_queue = [SB, BB]
-start_order = [HJ, CO, D]
-action_queue = [UTG]
-UTG bet : actioned_queue = [SB, BB], start_order.append(actioned_queue)
-start_order = [HJ, CO, D, SB, BB]
-actioned_queue = [UTG]
-HJ  call : actioned_queue = [UTG, HJ]
-start_order = [D, SB, BB]
-action_queue = [CO]
-CO  fold : fold_user = [CO]
-start_order = [SB, BB]
-action_queue = [D]
-D all_in : all_in_user = [D], start_order.append(actioned_queue) 
-start_order = [SB, BB, UTG, HJ]
-actioned_queue = []
-fold_user = [CO]
-all_in_user = [D]
-action_queue = [SB]
-start_order = [BB, UTG, HJ]
-SB, UTG, HJ call
-actioned_queue  = [BB, UTG, HJ]
 
-
-메인 팟, 사이드 팟을 만들고 각 팟에 지분이 있는 플레이어를 관리
+메인 팟, 사이드 팟을 만들고 각 팟에 지분이 있는 플레이어를 관리  
 
 
 ### 액션 큐(라이브 플레이어를 요소로 가지는 덱) 
@@ -578,7 +578,7 @@ actioned_queue  = [BB, UTG, HJ]
     이때 raise 스크롤의 min value 는 the largest prior full bet(raise) 이다.
     콜 금액 <= 플레이어의 스택 사이즈 < 콜 금액 + LPFB 이면
     call/ all-in 버튼만 활성화 시킨다. raise 버튼 비활성화
-   플레이어의 스택 사이즈 <  콜 금액 이면
+    플레이어의 스택 사이즈 <  콜 금액 이면
     all-in 버튼만 활성화시킨다. call 버튼도 비활성화
      
     A player who raises 50% or more of the largest prior bet but 
@@ -594,7 +594,7 @@ actioned_queue  = [BB, UTG, HJ]
             현재 스트릿에서 앞서 있었던 가장 큰 full bet 액수만큼 또는 
             앞서 있었던 full raise 금액 내지 그 액수 만큼의 raise 행위를 말한다.
      
-# (later)
+    # (later)
     the largest prior full bet(raise) 의 50%  <= 레이즈 액수  < the largest prior full bet(raise) 이면
         minimum raise를 할 수 없으므로 
         all-in/fold 버튼만 활성화시킨다. 
@@ -603,9 +603,10 @@ actioned_queue  = [BB, UTG, HJ]
     Declaring an amount or pushing out the same amount of chips is treated the same (Rule 40-C). 
      
     50% 미만이면 모두 콜로 판정한다. (예외 : 던질 때 먼저 레이즈라고 말했거나, 올인한 경우)
-# (later)
- 레이즈 액수  < the largest prior full bet(raise) 의 50% 이면, 
-        call/raise 버튼은 비활성화, all-in/fold 버튼만 활성화 시켜야 한다 
+    
+    # (later)
+     레이즈 액수  < the largest prior full bet(raise) 의 50% 이면, 
+            call/raise 버튼은 비활성화, all-in/fold 버튼만 활성화 시켜야 한다 
      
     B: Without other clarifying information, declaring raise and an amount is the total bet.
     Ex: A opens for 2000, B declares “Raise, eight thousand.” The total bet is 8000.
