@@ -12,6 +12,8 @@ class PreInitializer:
         self.SB, self.BB = self._blind_post(stakes)
         self.main_pot = 0
         self.side_pot = None
+
+        self.hand_actions = {"pre_flop" : [], "flop" : [], "turn" : [], "river" : []}
         
 
         # 포지션과 유저 ID를 할당
@@ -65,23 +67,11 @@ class PreInitializer:
         if stakes == "low":
             sb = 1
             bb = 2
+        elif stakes == "high":
+            sb = 2
+            bb = 5
         return sb, bb
 
-    def _posting_blind(self, players, stakes):
-        if stakes == "low":
-            sb = 1
-            bb = 2
-            players["SB"]["stk_size"] -= sb
-            players["BB"]["stk_size"] -= bb
-            self.main_pot -= (sb + bb)
-
-            return players, bb
-
-        elif stakes == "high":
-            pass
-        
-        else:
-            pass    
 
     def _initialize_players(self, user_id_list, stk_size, players, shuffled_deck, stakes):
         # 각 user_id에 해당하는 stk_size 값을 players 딕셔너리에 추가합니다.
@@ -90,11 +80,16 @@ class PreInitializer:
             if user_id in user_id_list:
                 players[position]['stk_size'] = stk_size[user_id]
                 players[position]['starting_cards'] = []  
-                players[position]['pre_actions'] = []  
+                players[position]['actions'] = {
+                    "pre_flop": {"action_list" : [], "betting_size": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]}},
+                    "flop": {"action_list" : [], "betting_size": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]}},
+                    "turn": {"action_list" : [], "betting_size": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]}},
+                    "river": {"action_list" : [], "betting_size": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]}},
+                }
+
             else:
                 pass  # 예외처리
         
         players, stub = self._dealing_cards(players, shuffled_deck)
-        players = self._posting_blind(players, stakes)
 
         return players, stub

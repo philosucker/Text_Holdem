@@ -1,5 +1,6 @@
 from src import PreInitializer
 from collections import deque
+from collections import OrderedDict
 
 rings = 6  # robby 에서 전달 받음
 user_id_list = ['1', '2', '3', '4', '5', '6'] # robby 에서 전달 받음
@@ -18,7 +19,7 @@ class Dealer(PreInitializer):
         elif self.rings == 9:
             self.start_order = deque(['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB'])
 
-        self.main_pot_confirmed = 0
+        self.main_pot_confirmed = OrderedDict()
         self.side_pot = [0] * (rings - 1)
         self.side_pot_counter = -1
 
@@ -32,7 +33,7 @@ class Dealer(PreInitializer):
 
         self.survivors = [] # 다음 스트릿으로 갈 생존자 리스트
         self.check_list = [] # 플롭 이후부터 사용
-        self.short_stack_users_counter = 0
+        self.deep_stack_user_counter = 0
 
         self.raised_total = 0 # 클라이언트로부터 전달받는 데이터, 전달 받을 때마다 갱신
         self.all_in_amount = 0   # 클라이언트로부터 전달받는 데이터, 전달 받을 때마다 갱신
@@ -49,6 +50,15 @@ class Dealer(PreInitializer):
         self.turn_cards = []
         self.river_cards = []
 
+    def posting_blind(self, players, stakes):
+        if stakes == "low":
+            players["SB"]["stk_size"] -= self.SB
+            players["BB"]["stk_size"] -= self.BB
+            self.players["SB"]["actions"]["pre_flop"]["betting_size"]["bet"].append(self.SB)
+            self.players["SB"]["actions"]["pre_flop"]["action_list"].append("bet")
+            self.players["BB"]["actions"]["pre_flop"]["betting_size"]["bet"].append(self.BB)
+            self.players["BB"]["actions"]["pre_flop"]["action_list"].append("bet")
+            self.main_pot += (self.SB + self.BB)
     
     def preFlop(self):
         
@@ -58,8 +68,8 @@ class Dealer(PreInitializer):
         self.action_queue.append(self.start_order.popleft())
 
         while self.action_queue:
-            current_player = self.action_queue[0]                     
-        
+            current_player = self.action_queue[0]
+                     
              # BB 옵션 구현 및 BB check 구현, 프리플롭에서만 사용
             if len(self.actioned_queue) + len(self.fold_users) == self.rings - 1 and self.raised_total == 0:
                 if self.attack_flags is True and self.prev_TOTAL <= self.players[current_player][stk_size]:
@@ -86,28 +96,69 @@ class Dealer(PreInitializer):
 
             # current_player에 해당하는 클라이언트에게 possible_actions 전달, 응답 기다림
                    
-            answer = input() # "레이즈는 {"raise" : raised_total} 형식으로. 
+            answer = input() # 레이즈는 {"raise" : raised_total} 올인은 {"all-in" : all_in_amount} 벳은 {"bet" : bet_amount}
 
+            self.hand_actions["pre_flop"].append((current_player, answer)) # 유저 액션 기록    
+
+            # 클라이언트에게 전달 받은 응답이 call 이면
             if answer == "call":
-                # 클라이언트에게 전달 받은 응답이 call 이면
+                # 현재 액션이 첫번째 액션이 아닌 경우
+                if self.players[current_player]["actions"]["pre_flop"]["action_list"]:
+                    last_action = self.players[current_player]["actions"]["pre_flop"]["action_list"][-1]
+                    self.players[current_player]["stk_size"] -= (self.prev_VALID - self.players[current_player]["actions"]["pre_flop"]["betting_size"][last_action])
+                    self.players[current_player]["actions"]["pre_flop"]["action_list"].append("call")
+                    self.players[current_player]["actions"]["pre_flop"]["betting_size"]["call"].append(self.prev_VALID)
+
+                    self.main_pot += (self.prev_VALID - self.players[current_player]["actions"]["pre_flop"]["betting_size"][last_action])
+                # 현재 액션 콜이 첫번째 액션인 경우
+                else:
+                    last_action = "call"
+                    self.players[current_player]["actions"]["pre_flop"]["action_list"].append(last_action)
+                    self.players[current_player]["actions"]["pre_flop"]["betting_size"]["call"].append(self.prev_VALID)
+
+                    self.main_pot += self.prev_VALID
+
+                self.pot_change.append(self.prev_VALID) # 팟 변화량 업데이트
+ 
                 self.actioned_queue.append(self.action_queue.popleft())
 
-                self.main_pot += self.prev_VALID
-                self.pot_change.append(self.prev_VALID) # 팟 변화량 업데이트
-
-                self.players[current_player]["stk_size"] -= self.prev_VALID
                 # 모든 클라이언트들에게 다음을 요청
                     # 콜한 클라이언트의 스택 사이즈를 self.prev_VALID 만큼 차감한 결과로 렌더링
-                    # 메인팟 사이즈를 prev_VALID을 더한 결과로 렌더링              
+                    # 메인팟 사이즈를 prev_VALID을 더한 결과로 렌더링
 
             elif answer == "fold":
                 # 클라이언트에게 전달 받은 응답이 fold 면 
                 self.fold_users.append(self.action_queue.popleft())
-                pass # 메인팟 사이드팟 관련 구현 필요한지?
 
             elif next(iter(answer)) == "raise":
                 # 클라이언트로부터 전달 받은 응답이 answer = {"raise" : raised_total} 이면
                     # raised_total : 클라이언트에게서 전달받은 레이즈 액수 (레이즈 액수는 total을 의미.)
+
+                self.raised_total = answer["raise"]
+
+                self.LPFB = self.raised_total - self.prev_VALID # LPFB 업데이트
+                self.prev_VALID = self.raised_total # prev_VALID 업데이트
+                self.prev_TOTAL = self.LPFB + self.prev_VALID # prev_TOTAL 업데이트
+
+                # 현재 액션이 첫번째 액션이 아닌 경우
+                if self.players[current_player]["actions"]["pre_flop"]["action_list"]:
+                    last_action = self.players[current_player]["actions"]["pre_flop"]["action_list"][-1]
+                    self.players[current_player]["stk_size"] -= (self.raised_total - self.players[current_player]["actions"]["pre_flop"]["betting_size"][last_action])
+                    self.players[current_player]["actions"]["pre_flop"]["action_list"].append("raise")
+                    self.players[current_player]["actions"]["pre_flop"]["betting_size"]["raise"].append(self.raised_total)
+                
+                    self.main_pot += (self.raised_total - self.players[current_player]["actions"]["pre_flop"]["betting_size"][last_action])
+                # 현재 액션 레이즈가 첫번째 액션인 경우
+                else:
+                    last_action = "raise"
+                    self.players[current_player]["actions"]["pre_flop"]["action_list"].append(last_action)
+                    self.players[current_player]["actions"]["pre_flop"]["betting_size"]["raise"].append(self.raised_total)
+
+                    self.main_pot += self.raised_total # 메인팟 업데이트
+                
+                self.pot_change.append(self.raised_total) # 팟 변화량 업데이트
+
+                self.raise_counter += 1
 
                 # 액션큐 처리. 올인/벳 동일
                 if self.actioned_queue is not None:
@@ -117,19 +168,6 @@ class Dealer(PreInitializer):
                     self.actioned_queue.append(self.action_queue.popleft())
                 else:
                     self.actioned_queue.append(self.action_queue.popleft())
-                
-                self.raised_total = answer["raise"]
-
-                self.LPFB = self.raised_total - self.prev_VALID # LPFB 업데이트
-                self.prev_VALID = self.raised_total # prev_VALID 업데이트
-                self.prev_TOTAL = self.LPFB + self.prev_VALID # prev_TOTAL 업데이트
-
-                self.main_pot += self.raised_total # 메인팟 업데이트
-
-                self.pot_change.append(self.raised_total) # 팟 변화량 업데이트
-                self.players[current_player]['stk_size'] -= self.raised_total
-
-                self.raise_counter += 1
 
                 # 모든 클라이언트들에게 다음을 요청
                     # 레이즈한 클라이언트의 스택 사이즈를 raised_total 만큼 차감한 결과로 렌더링
@@ -141,16 +179,7 @@ class Dealer(PreInitializer):
 
                 # 모든 클라이언트들에게 다음을 요청
                     # 올인한 클라이언트에게 올인 버튼 렌더링(지속형 이벤트)
-
-                # 액션큐 처리. 레이즈/벳 동일
-                if self.actioned_queue is not None:
-                    for actor in self.actioned_queue:
-                        self.start_order.append(actor)
-                    self.actioned_queue = deque([])
-                    self.all_in_users.append(self.action_queue.popleft())
-                else:
-                    self.all_in_users.append(self.action_queue.popleft())
-                
+        
                 self.all_in_amount = answer['all-in']
 
                 if self.prev_TOTAL <= self.all_in_amount:
@@ -165,53 +194,145 @@ class Dealer(PreInitializer):
                 elif self.all_in_amount < self.prev_VALID:
                     pass # 구현 불필요
 
-                self.players[current_player]['stk_size'] -= self.all_in_amount
+                # 현재 액션이 첫번째 액션이 아닌 경우
+                if self.players[current_player]["actions"]["pre_flop"]["action_list"]:
+                    last_action = self.players[current_player]["actions"]["pre_flop"]["action_list"][-1]
+                    self.players[current_player]["stk_size"] -= (self.prev_VALID - self.players[current_player]["actions"]["pre_flop"]["betting_size"][last_action])
+                    self.players[current_player]["actions"]["pre_flop"]["action_list"].append("all_in")
+                    self.players[current_player]["actions"]["pre_flop"]["betting_size"]["all-in"].append(self.all_in_amount)
+                    
+                    self.main_pot += (self.all_in_amount - self.players[current_player]["actions"]["pre_flop"]["betting_size"][last_action])
+                # 현재 액션 올인이 첫번째 액션인 경우
+                else:
+                    last_action = "all-in"
+                    self.players[current_player]["actions"]["pre_flop"]["action_list"].append(last_action)
+                    self.players[current_player]["actions"]["pre_flop"]["betting_size"]["all-in"].append(self.all_in_amount)
 
-                self.main_pot += self.all_in_amount # 메인팟 업데이트
+                    self.main_pot += self.all_in_amount # 메인팟 업데이트
+
                 self.pot_change.append(self.all_in_amount) # 팟 변화량 업데이트
-
+                
+                # 액션큐 처리. 레이즈/벳 동일
+                if self.actioned_queue is not None:
+                    for actor in self.actioned_queue:
+                        self.start_order.append(actor)
+                    self.actioned_queue = deque([])
+                    self.all_in_users.append(self.action_queue.popleft())
+                else:
+                    self.all_in_users.append(self.action_queue.popleft())
+                
                 # 모든 클라이언트들에게 다음을 요청
                     # 올인한 클라이언트의 스택 사이즈를 self.all_in_amount 만큼 차감한 결과로 렌더링
                     # 메인팟 사이즈를 self.all_in_amount을 더한 결과로 렌더링
 
             elif answer == "check":  # BB 만 가능
                 if current_player == "BB":
+                    last_action = "check"
+                    self.players[current_player]["actions"]["pre_flop"]["action_list"].append(last_action)
                     self.actioned_queue.append(self.action_queue.popleft())
+                    self.check_list.append()
                     return
             
-            # 프리플롭 종료조건 (올인이 일어난 경우) showdown3 로.
-            if self.all_in_amount < self.prev_VALID: # 현재 올인이 언더콜인 경우, 해당 올인 기준으로 메인팟 확정, 이후 사이드팟 사용
-                self.main_pot_confirmed = self.main_pot
-                self.side_pot_counter += 1
-                self.main_pot = self.side_pot[self.side_pot_counter]
-                # 각 유저가 어느 팟에 지분이 있는지 관리하는 알고리즘 필요
+            # 올인 발생시 핸드 종료조건            
+            if next(iter(answer)) == "all-in":
 
-            elif self.all_in_amount >= self.prev_VALID: # 현재 올인이 언더콜이 아닌 경우      
                 for position in self.start_order:
-                    if self.players[position]['stk_size'] < self.prev_TOTAL:
-                        self.short_stack_users_counter += 1
-                # 올인 유저 제외 남은 라이브 플레이어들 중 한명 이하만 딥스택인 경우 핸드 종료
-                if self.short_stack_users_counter >= len(self.start_order) - 1: 
-                    '''
-                    남은 라이브 클라이언트 모두에게 동시에 액션 요청 (call, fold 버튼만 활성화)
-                    응답 다 받으면 self.main_pot 업데이트 하고
-                        self.main_pot += self.all_in_amount # 메인팟 업데이트
-                        self.pot_change.append(self.all_in_amount) # 팟 변화량 업데이트
-                    '''
-                    return # showdown3 으로. 사이드팟 필요 없음
-                # 올인 유저 제외 남은 라이브 플레이어들 중 2명 이상이 딥스택인 경우, 스트릿 계속 진행
-                else: # 이후 사이드팟 사용
-                    self.short_stack_users_counter = 0
-                    self.main_pot_confirmed = self.main_pot
-                    self.side_pot_counter += 1
-                    self.main_pot = self.side_pot[self.side_pot_counter]
-                    # 각 유저가 어느 팟에 지분이 있는지 관리하는 알고리즘 필요
+                    if self.prev_TOTAL < self.players[position]['stk_size']:
+                        self.deep_stack_user_counter += 1
 
-                    return
+                # 올인 유저 제외 남은 라이브 플레이어들 중 한명 이하만 (올인에 콜하고 나아가 레이즈 까지 할 수 있는)딥스택인 경우, 핸드 종료
+                # main_pot 만 사용해 pot awarding
+                if self.deep_stack_user_counter < 2: 
 
+                    self.action_queue.append(self.start_order.popleft())
+
+                    while self.action_queue: # start_order 소진후 while문 종료시 showdown 3으로
+                        current_player = self.action_queue[0]
+
+                    # 남은 라이브 클라이언트 모두에게 동시에 액션 요청 (call, fold 버튼만 활성화)
+                        answer = input()
+                    
+                        possible_actions = ["call", "fold"]
+                        
+                        if answer == "call":
+                            # 현재 액션이 첫번째 액션이 아닌 경우
+                            if self.players[current_player]["actions"]["pre_flop"]["action_list"]:
+                                last_action = self.players[current_player]["actions"]["pre_flop"]["action_list"][-1]
+                                self.players[current_player]["stk_size"] -= (self.prev_VALID - self.players[current_player]["actions"]["pre_flop"]["betting_size"][last_action])
+                                self.players[current_player]["actions"]["pre_flop"]["action_list"].append("call")
+                                self.players[current_player]["actions"]["pre_flop"]["betting_size"]["call"].append(self.prev_VALID)
+
+                                self.main_pot += (self.prev_VALID - self.players[current_player]["actions"]["pre_flop"]["betting_size"][last_action])
+                            # 현재 액션 콜이 첫번째 액션인 경우
+                            else:
+                                last_action = "call"
+                                self.players[current_player]["actions"]["pre_flop"]["action_list"].append(last_action)
+                                self.players[current_player]["actions"]["pre_flop"]["betting_size"]["call"].append(self.prev_VALID)
+
+                                self.main_pot += self.prev_VALID
+
+                            self.pot_change.append(self.prev_VALID) # 팟 변화량 업데이트
+            
+                            self.actioned_queue.append(self.action_queue.popleft())
+
+                            # 모든 클라이언트들에게 다음을 요청
+                                # 콜한 클라이언트의 스택 사이즈를 self.prev_VALID 만큼 차감한 결과로 렌더링
+                                # 메인팟 사이즈를 prev_VALID을 더한 결과로 렌더링
+
+                        elif answer == "fold": # 올인 유저가 한명있고 모두 폴드한 경우, 핸드 종료
+                            # 클라이언트에게 전달 받은 응답이 fold 면 
+                            self.fold_users.append(self.action_queue.popleft())
+
+                        self.action_queue.append(self.start_order.popleft())
+                    
+                    return # showdown3 로. main_pot 으로 award
                 
+                # 올인 유저 제외 남은 라이브 플레이어들 중 2명 이상이 딥스택인 경우, 스트릿 계속 진행
+                else:
+                    pass
+
+
+            # 프리플롭 종료조건 (올인이 일어난 경우) showdown3 로.
+            # 메인 팟 계산
+            if len(self.all_in_users) != 0 and self.start_order == 0:
+                all_user = []
+                for position in self.actioned_queue:
+                    all_user.append(position)
+                for position in self.all_in_users:
+                    all_user.append(position)
+                for position in self.fold_users:
+                    all_user.append(position)
+
+                main_pot_sum = 0
+                
+                for all_in_position in self.all_in_users:
+                    all_in_size = self.players[all_in_position]["actions"]["pre_flop"]["betting_size"]["all-in"]
+                    for position in all_user:
+                        last_action = self.players[position]["actions"]["pre_flop"]["action_list"][-1]
+                        last_betting_size = self.players[position]["actions"]["pre_flop"]["betting_size"][last_action]
+                        if last_betting_size >= all_in_size:
+                            main_pot_sum += all_in_size
+                        else:
+                            main_pot_sum += last_betting_size
+                    self.main_pot_confirmed[all_in_position] = main_pot_sum             
+
+                for position in self.fold_users:
+                    self.players[position]["actions"]["flop"]["action_list"].append("fold'")
+
+                # 올인 유저가 한 명이상 있고, 올인 유저 제외 딥스택 유저가 두명 이상 남아 있어서 다음 스트릿으로 넘어가야 하는 경우
+                # main_pot_confirmed 다음 스트릿으로 리턴. pot awarding시 main_pot_confirmed 사용. 
+                if self.deep_stack_user_counter >= 2:
+                    return # 다음 스트릿으로
+                
+                # 모두 올인한 경우, 핸드 종료            
+                elif len(self.fold_users) + len(self.all_in_users) == len(all_user) - len(self.actioned_queue):
+                    return # showdownd 3로
+
+                else:
+                    pass
 
             # 프리플롭 종료 조건 (올인이 일어나지 않은 경우)
+            # main_pot 만 사용해 pot awarding
             if len(self.all_in_users) == 0 and len(self.start_order) == 0: 
                 # 올인이 일어나지 않은 쇼다운
                 # 마지막 스트릿에 베팅이 있었던 경우
@@ -229,12 +350,12 @@ class Dealer(PreInitializer):
         self.survivors.extend(self.all_in_users)
         self.survivors.extend(self.actioned_queue)
 
-        return self.survivors, self.main_pot_confirmed, self.side_pot
+        return self.survivors
     
 
 
     def Flop(self, survivors, main_pot, side_pot):
-        # 모든 인스턴스 변수 초기화
+        # 초기화 해줘야 할 인스턴스 변수들 초기화
         # 본격적으로 시작 전, start_order 수 그대로 클라이언트들 접속 중인지 응답 요청, 이 시점 이후로 접종된 유저는 모두 fold_users 처리
 
         self.attack_flag = False
@@ -298,21 +419,37 @@ class Dealer(PreInitializer):
             # current_player에 해당하는 클라이언트에게 possible_actions 전달, 응답 기다림       
             answer = input() # "레이즈는 {"raise" : raised_total} 형식으로. 
 
+            self.hand_actions["flop"].append((current_player, answer)) # 유저 액션 기록    
+
             if answer == "call":
                 # 클라이언트에게 전달 받은 응답이 call 이면
 
                 if current_player in self.check_list:
                     self.check_list.remove(current_player)
 
+                # 현재 액션이 첫번째 액션이 아니고 마지막으로 한 액션이 check이 아닌 경우
+                if self.players[current_player]["actions"]["flop"]["action_list"] and self.players[current_player]["actions"]["flop"]["action_list"][-1] != 'check':
+                    last_action = self.players[current_player]["actions"]["flop"]["action_list"][-1]
+                    self.players[current_player]["stk_size"] -= (self.prev_VALID - self.players[current_player]["actions"]["flop"]["betting_size"][last_action])
+                    self.players[current_player]["actions"]["flop"]["action_list"].append("call")
+                    self.players[current_player]["actions"]["flop"]["betting_size"]["call"].append(self.prev_VALID)
+                    
+                    self.main_pot += (self.prev_VALID - self.players[current_player]["actions"]["flop"]["betting_size"][last_action])
+                # 현재 액션 콜이 첫번째 액션인 경우 또는 마지막으로 했던 액션이 체크였던 경우
+                else:
+                    last_action = "call"
+                    self.players[current_player]["actions"]["flop"]["action_list"].append(last_action)
+                    self.players[current_player]["actions"]["flop"]["betting_size"]["call"].append(self.prev_VALID)
+            
+                    self.main_pot += self.prev_VALID
+                
+                self.pot_change.append(self.prev_VALID) # 팟 변화량 업데이트
+ 
                 self.actioned_queue.append(self.action_queue.popleft())
 
-                self.main_pot += self.prev_VALID
-                self.pot_change.append(self.prev_VALID) # 팟 변화량 업데이트
-
-                self.players[current_player]["stk_size"] -= self.prev_VALID
                 # 모든 클라이언트들에게 다음을 요청
                     # 콜한 클라이언트의 스택 사이즈를 self.prev_VALID 만큼 차감한 결과로 렌더링
-                    # 메인팟 사이즈를 prev_VALID을 더한 결과로 렌더링              
+                    # 메인팟 사이즈를 prev_VALID을 더한 결과로 렌더링
 
             elif answer == "fold":
                 # 클라이언트에게 전달 받은 응답이 fold 면 
@@ -320,7 +457,6 @@ class Dealer(PreInitializer):
                     self.check_list.remove(current_player)
 
                 self.fold_users.append(self.action_queue.popleft())
-                pass # 메인팟 사이드팟 관련 구현 필요한지?
 
             elif next(iter(answer)) == "raise":
                 # 클라이언트로부터 전달 받은 응답이 answer = {"raise" : raised_total} 이면
@@ -329,6 +465,34 @@ class Dealer(PreInitializer):
                 if current_player in self.check_list:
                     self.check_list.remove(current_player)
 
+                self.raised_total = answer["raise"]
+
+                self.LPFB = self.raised_total - self.prev_VALID # LPFB 업데이트
+                self.prev_VALID = self.raised_total # prev_VALID 업데이트
+                self.prev_TOTAL = self.LPFB + self.prev_VALID # prev_TOTAL 업데이트
+                
+                # 현재 액션이 첫번째 액션이 아니고 마지막으로 한 액션이 check이 아닌 경우
+                if self.players[current_player]["actions"]["flop"]["action_list"] and self.players[current_player]["actions"]["flop"]["action_list"][-1] != 'check':
+                    last_action = self.players[current_player]["actions"]["flop"]["action_list"][-1]
+                    self.players[current_player]["stk_size"] -= (self.prev_VALID - self.players[current_player]["actions"]["flop"]["betting_size"][last_action])
+                    self.players[current_player]["actions"]["flop"]["action_list"].append("raise")
+                    self.players[current_player]["actions"]["flop"]["betting_size"]["raise"].append(self.raised_total)
+               
+                    self.main_pot += (self.raised_total - self.players[current_player]["actions"]["flop"]["betting_size"][last_action])
+                # 현재 액션 레이즈가 첫번째 액션인 경우 또는 마지막으로 했던 액션이 체크였던 경우
+                else:
+                    last_action = "raise"
+                    self.players[current_player]["actions"]["flop"]["action_list"].append(last_action)
+                    self.players[current_player]["actions"]["flop"]["betting_size"]["raise"].append(self.raised_total)
+
+                    self.main_pot += self.raised_total # 메인팟 업데이트
+                
+                self.pot_change.append(self.raised_total) # 팟 변화량 업데이트
+
+                self.raise_counter += 1
+                
+                self.attack_flag = True  
+
                 # 액션큐 처리. 올인/벳 동일
                 if self.actioned_queue is not None:
                     for actor in self.actioned_queue:
@@ -336,22 +500,7 @@ class Dealer(PreInitializer):
                     self.actioned_queue = deque([])
                     self.actioned_queue.append(self.action_queue.popleft())
                 else:
-                    self.actioned_queue.append(self.action_queue.popleft())
-                
-                self.raised_total = answer["raise"]
-
-                self.LPFB = self.raised_total - self.prev_VALID # LPFB 업데이트
-                self.prev_VALID = self.raised_total # prev_VALID 업데이트
-                self.prev_TOTAL = self.LPFB + self.prev_VALID # prev_TOTAL 업데이트
-
-                self.main_pot += self.raised_total # 메인팟 업데이트
-
-                self.pot_change.append(self.raised_total) # 팟 변화량 업데이트
-                self.players[current_player]['stk_size'] -= self.raised_total
-
-                self.attack_flag = True  
-
-                self.raise_counter += 1
+                    self.actioned_queue.append(self.action_queue.popleft())               
 
                 # 모든 클라이언트들에게 다음을 요청
                     # 레이즈한 클라이언트의 스택 사이즈를 raised_total 만큼 차감한 결과로 렌더링
@@ -367,15 +516,6 @@ class Dealer(PreInitializer):
                 # 모든 클라이언트들에게 다음을 요청
                     # 올인한 클라이언트에게 올인 버튼 렌더링(지속형 이벤트)
 
-                # 액션큐 처리. 레이즈/벳 동일
-                if self.actioned_queue is not None:
-                    for actor in self.actioned_queue:
-                        self.start_order.append(actor)
-                    self.actioned_queue = deque([])
-                    self.all_in_users.append(self.action_queue.popleft())
-                else:
-                    self.all_in_users.append(self.action_queue.popleft())
-                
                 self.all_in_amount = answer['all-in']
 
                 if self.attack_flag == False: # 해당 올인이 open-bet인 경우
@@ -391,6 +531,7 @@ class Dealer(PreInitializer):
                     
                     elif self.all_in_amount < self.prev_VALID:
                         pass # 구현 불필요
+
                 else:  # 해당 올인이 open-bet이 아닌 경우
                     if self.prev_TOTAL <= self.all_in_amount:
                         self.LPFB = self.all_in_amount - self.prev_VALID
@@ -404,52 +545,42 @@ class Dealer(PreInitializer):
                     elif self.all_in_amount < self.prev_VALID:
                         pass # 구현 불필요
 
-                self.main_pot += self.all_in_amount # 메인팟 업데이트
+                # 현재 액션이 첫번째 액션이 아니고 마지막으로 한 액션이 check이 아닌 경우
+                if self.players[current_player]["actions"]["flop"]["action_list"] and self.players[current_player]["actions"]["flop"]["action_list"][-1] != 'check':
+                    last_action = self.players[current_player]["actions"]["flop"]["action_list"][-1]
+                    self.players[current_player]["stk_size"] -= (self.prev_VALID - self.players[current_player]["actions"]["flop"]["betting_size"][last_action])
+                    self.players[current_player]["actions"]["flop"]["action_list"].append("all_in")
+                    self.players[current_player]["actions"]["flop"]["betting_size"]["all-in"].append(self.all_in_amount)
+                
+                    self.main_pot += (self.all_in_amount - self.players[current_player]["actions"]["flop"]["betting_size"][last_action])                
+                # 현재 액션 올인이 첫번째 액션인 경우 또는 마지막으로 했던 액션이 체크였던 경우
+                else:
+                    last_action = "all-in"
+                    self.players[current_player]["actions"]["flop"]["action_list"].append(last_action)
+                    self.players[current_player]["actions"]["flop"]["betting_size"]["all-in"].append(self.all_in_amount)
+
+                    self.main_pot += self.all_in_amount # 메인팟 업데이트
+
                 self.pot_change.append(self.all_in_amount) # 팟 변화량 업데이트
 
-                self.players[current_player]['stk_size'] -= self.all_in_amount
-
                 self.attack_flag = True  
+
+                # 액션큐 처리. 레이즈/벳 동일
+                if self.actioned_queue is not None:
+                    for actor in self.actioned_queue:
+                        self.start_order.append(actor)
+                    self.actioned_queue = deque([])
+                    self.all_in_users.append(self.action_queue.popleft())
+                else:
+                    self.all_in_users.append(self.action_queue.popleft())
 
                 # 모든 클라이언트들에게 다음을 요청
                     # 올인한 클라이언트의 스택 사이즈를 self.all_in_amount 만큼 차감한 결과로 렌더링
                     # 메인팟 사이즈를 self.all_in_amount을 더한 결과로 렌더링
             
-            elif next(iter(answer)) == "bet":
-                # 클라이언트로부터 전달 받은 응답이 answer = {"bet" : bet_amount} 이면
-                    # bet_amount : 클라이언트에게서 전달받은 베팅액수
-
-                if current_player in self.check_list:
-                    self.check_list.remove(current_player)
-
-                # 액션큐 처리. 올인/레이즈 동일
-                if self.actioned_queue is not None:
-                    for actor in self.actioned_queue:
-                        self.start_order.append(actor)
-                    self.actioned_queue = deque([])
-                    self.actioned_queue.append(self.action_queue.popleft())
-                else:
-                    self.actioned_queue.append(self.action_queue.popleft())
-
-                self.bet_amount = answer['bet']
-
-                self.LPFB = self.bet_amount
-                self.VALID = self.bet_amount
-                self.prev_TOTAL = self.VALID + self.LPFB
-
-                self.main_pot += self.bet_amount # 메인팟 업데이트
-                self.pot_change.append(self.bet_amount) # 팟 변화량 업데이트
-
-                self.players[current_player]['stk_size'] -= self.bet_amount
-
-                self.attack_flag = True 
-
-                # 모든 클라이언트들에게 다음을 요청
-                    # 베팅한 클라이언트의 스택 사이즈를 self.bet_amount 만큼 차감한 결과로 렌더링
-                    # 메인팟 사이즈를 self.bet_amount을 더한 결과로 렌더링
-
-
             elif answer == "check":
+                last_action = "check"
+                self.players[current_player]["actions"]["flop"]["action_list"].append(last_action)      
                 if len(self.check_list) == len(self.survivors):  # check는 flop, turn, river 에서만 구현
                     return
                     # 모든 클라이언트에게 다음을 요청
@@ -461,11 +592,49 @@ class Dealer(PreInitializer):
                     # 모든 클라이언트들에게 다음을 요청
                         # 체크한 플레이어가 체크했음을 렌더링
 
+            elif next(iter(answer)) == "bet":
+                # 클라이언트로부터 전달 받은 응답이 answer = {"bet" : bet_amount} 이면
+                    # bet_amount : 클라이언트에게서 전달받은 베팅액수
+
+                if current_player in self.check_list:
+                    self.check_list.remove(current_player)
+
+                self.bet_amount = answer['bet']
+
+                self.LPFB = self.bet_amount
+                self.VALID = self.bet_amount
+                self.prev_TOTAL = self.VALID + self.LPFB
+
+                # bet은 항상 첫번째 액션
+                last_action = "bet"
+                self.players[current_player]["actions"]["flop"]["action_list"].append(last_action)
+                self.players[current_player]["actions"]["flop"]["betting_size"]["bet"].append(self.bet_amount)
+
+                self.main_pot += self.bet_amount # 메인팟 업데이트
+                self.pot_change.append(self.bet_amount) # 팟 변화량 업데이트
+
+                self.attack_flag = True 
+
+                # 액션큐 처리. 올인/레이즈 동일
+                if self.actioned_queue is not None:
+                    for actor in self.actioned_queue:
+                        self.start_order.append(actor)
+                    self.actioned_queue = deque([])
+                    self.actioned_queue.append(self.action_queue.popleft())
+                else:
+                    self.actioned_queue.append(self.action_queue.popleft())
+
+                # 모든 클라이언트들에게 다음을 요청
+                    # 베팅한 클라이언트의 스택 사이즈를 self.bet_amount 만큼 차감한 결과로 렌더링
+                    # 메인팟 사이즈를 self.bet_amount을 더한 결과로 렌더링
+
+
             # 플롭, 턴, 종료조건 (올인이 일어난 경우) showdown3로
 
             # 리버 종료 조건 (올인이 일어난 경우) 마지막 올인에 대해 모든 유저가 올인 또는 콜 또는 폴드로 대답한 경우만 따지면 끝
 
             # 플롭, 턴, 리버 종료조건 (올인이 일어나지 않은 경우)
+            # main_pot 만 사용해 pot awarding
             if len(self.all_in_users) == 0 and len(self.start_order) == 0: 
                 # 올인이 일어나지 않은 쇼다운
                 # 마지막 스트릿에 베팅이 있었던 경우
@@ -495,21 +664,26 @@ class Dealer(PreInitializer):
 
     def showdown(self):
         '''
-        올인이 아닌 쇼다운
-            남은 커뮤니티 카드들을 하나씩 모두 오픈하고
-                마지막 스트릿에 베팅이 있었던 경우 (bet, 또는 raise가 있었고 모두 콜 또는 폴드한 경우) : showdown1
-                    라스트 어그레서부터 딜링방향으로 오픈 (모두 폴드한 경우엔 아무도 테이블링 하지 않는다)               
-                마지막 스트릿에 베팅이 없었던 경우 (모두 check한 경우) : showdown2
-                    마지막 스트릿의 첫번째 액션 차례였던 플레이어부터 딜링방향으로 오픈
-        올인이 있었던 쇼다운 : showdown3
-            모든 핸드는 먼저 테이블링 되고
-                남은 커뮤니티 카드들 하나씩 오픈하면서 쇼다운 시작
+        쇼다운 구현 ㄱ,ㄴ,ㄷ,ㄹ 4개 필요
+        1. 올인이 아닌 쇼다운
+            a. 남은 커뮤니티 카드들을 하나씩 모두 오픈하고 
+                1) 마지막 스트릿에 베팅이 있었던 경우 (bet, 또는 raise가 있었고 모두 콜 또는 폴드한 경우) : showdown1
+                    ㄱ. 라스트 어그레서부터 딜링방향으로 모두 오픈 후(폴드 유저 제외) 승자 판정 
+                    ㄴ. 모두 폴드한 경우엔 아무도 테이블링 하지 않는다. 베팅한 사람 바로 승자 판정
+                2) 마지막 스트릿에 베팅이 없었던 경우 (모두 check한 경우) : showdown2
+                    ㄷ. 마지막 스트릿의 첫번째 액션 차례였던 플레이어부터 딜링방향으로 모두 오픈 후 승자 판정
+        2. 올인이 있었던 쇼다운 : showdown3
+            b. 플레이어의 모든 스타팅 카드가 먼저 테이블링 되고 (폴드 유저 제외)
+                ㄹ. 남은 커뮤니티 카드들 하나씩 모두 오픈 후 승자 판정
         '''
+    def awarding_pot(self):
+        pass
 
 if __name__ == '__main__':
 
     dealer = Dealer(user_id_list, stk_size, rings, stakes)
     # 스트릿 루프 진입 전 클라이언트들에게 모두 제자리에 있는지 응답 요청
-
-
-    print(dealer.LPFB)
+    dealer.posting_blind(dealer.players, stakes="low") # 호출후 SB와 BB 클라이언트의 스택사이즈를 블라인드 차감된 양으로 렌더링 요청, 메인팟 업데이트 렌더링 요청
+    print(dealer.players)
+    print(dealer.players["BB"]["actions"]["pre_flop"]["betting_size"])
+    print(dealer.players["BB"]["actions"]["pre_flop"]["action_list"])
