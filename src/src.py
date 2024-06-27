@@ -11,7 +11,7 @@ class PreInitializer:
 
         self.SB, self.BB = self._blind_post(stakes)
         self.main_pot = 0
-        self.side_pot = 0
+        self.side_pot = None
         
 
         # 포지션과 유저 ID를 할당
