@@ -79,7 +79,8 @@ class PreInitializer:
             user_id = info['user_id']
             if user_id in user_id_list:
                 players[position]['stk_size'] = stk_size[user_id]
-                players[position]['starting_cards'] = []  
+                players[position]['starting_cards'] = []
+                # "betting_size" 에 적히는 값들은 항상 total을 의미
                 players[position]['actions'] = {
                     "pre_flop": {"action_list" : [], "betting_size": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]}},
                     "flop": {"action_list" : [], "betting_size": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]}},

@@ -30,6 +30,7 @@ class Dealer(PreInitializer):
 
         self.attack_flag = True # only only and just once bet, raise, all-in is True  # 플롭부터는 False로 초기화
         self.raise_counter = 0 # 5가 되면 Possible action 에서 raise 삭제. 구현 필요
+        self.reorder_flag = False # 현재 액션 유저를 기준으로 actioned_queue에 있는 유저들을 start_order 리스트 뒤에 붙이는 reorder를 금지시키기 위한 플래그
 
         self.survivors = [] # 다음 스트릿으로 갈 생존자 리스트
         self.check_list = [] # 플롭 이후부터 사용
@@ -62,12 +63,26 @@ class Dealer(PreInitializer):
     
     def preFlop(self):
         
-        # 본격적으로 시작 전, start_order 수 그대로 클라이언트들 접속 중인지 응답 요청, 이 시점 이후로 접종된 유저는 모두 fold_users 처리
-        
-        # 최초로 액션할 유저를 등록. 필요시 유저가 응답 가능한지 확인하고 불가능하면 다음 유저에게 물어보는 루프로 바꿀 것
+        '''
+        프리플롭 메서드 호출시 
+        최초로 액션할 유저가 응답 가능한지 확인하고 
+        액션큐 등록
+        불가능하면 폴드 처리하고 다음 유저에게 물어보는 루프로 바꿀 것
+        '''
         self.action_queue.append(self.start_order.popleft())
 
+
         while self.action_queue:
+
+            '''
+            while문 진입시마다, start_order에 있는 모든 클라이언트들 접속 중인지 응답 요청, 
+            접종된 유저는 모두 fold_users 처리
+
+            모든 클라이언트들에게 다음을 요청
+            1. 스타팅 카드 전송 후 렌더링
+            2. start_order 에 있는 유저만 남기고 나머지 유저들 삭제 렌더링
+            '''
+
             current_player = self.action_queue[0]
                      
              # BB 옵션 구현 및 BB check 구현, 프리플롭에서만 사용
@@ -192,6 +207,7 @@ class Dealer(PreInitializer):
                     self.prev_TOTAL = self.prev_VALID + self.LPFB
 
                 elif self.all_in_amount < self.prev_VALID:
+                    self.reorder_flag = False
                     pass # 구현 불필요
 
                 # 현재 액션이 첫번째 액션이 아닌 경우
@@ -213,13 +229,14 @@ class Dealer(PreInitializer):
                 self.pot_change.append(self.all_in_amount) # 팟 변화량 업데이트
                 
                 # 액션큐 처리. 레이즈/벳 동일
-                if self.actioned_queue is not None:
+                if self.reorder_flag == True and self.actioned_queue is not None:
                     for actor in self.actioned_queue:
                         self.start_order.append(actor)
                     self.actioned_queue = deque([])
                     self.all_in_users.append(self.action_queue.popleft())
-                else:
+                elif self.reorder_flag == False or len(self.actioned_queue) == 0:  # code_explanation.MD 참고
                     self.all_in_users.append(self.action_queue.popleft())
+                    self.reorder_flag = True
                 
                 # 모든 클라이언트들에게 다음을 요청
                     # 올인한 클라이언트의 스택 사이즈를 self.all_in_amount 만큼 차감한 결과로 렌더링
@@ -233,7 +250,7 @@ class Dealer(PreInitializer):
                     self.check_list.append()
                     return
             
-            # 올인 발생시 핸드 종료조건            
+            # 올인 발생시 딥스택 유저 수 부족으로 인한 핸드 종료조건          
             if next(iter(answer)) == "all-in":
 
                 for position in self.start_order:
@@ -350,23 +367,20 @@ class Dealer(PreInitializer):
         self.survivors.extend(self.all_in_users)
         self.survivors.extend(self.actioned_queue)
 
-        return self.survivors
+        return self.survivors        
     
 
+    def Flop(self):
+        
+        '''
+        초기화 해줘야 할 인스턴스 변수들 초기화
+        '''
 
-    def Flop(self, survivors, main_pot, side_pot):
-        # 초기화 해줘야 할 인스턴스 변수들 초기화
-        # 본격적으로 시작 전, start_order 수 그대로 클라이언트들 접속 중인지 응답 요청, 이 시점 이후로 접종된 유저는 모두 fold_users 처리
-
-        self.attack_flag = False
+        self.attack_flag = False # 플롭 이후부터는 attack_flag = False 가 디폴트
 
         self.burned_cards.append(self.stub.pop(0)) # 플롭 버닝
         for _ in range(3):
             self.flop_cards.append(self.stub.pop(0))
-
-        self.survivors = survivors
-        self.main_pot = main_pot
-        self.side_pot = side_pot
 
         if self.rings == 6:
             self.start_order = deque(["SB", "BB","UTG", "HJ", "CO", "D"])
@@ -380,41 +394,62 @@ class Dealer(PreInitializer):
                 if position not in self.survivors:
                     self.start_order.popleft()
 
-
-        # 모든 클라이언트들에게 다음을 요청
-            # 플롭 카드 전송 후 렌더링
-            # start_order 에 있는 유저만 남기고 나머지 유저들 삭제 렌더링
-
-        # 최초로 액션할 유저를 등록. 필요시 유저가 응답 가능한지 확인하고 불가능하면 다음 유저에게 물어보는 루프로 바꿀 것
+        '''
+        플롭 메서드 호출시 
+        최초로 액션할 유저가 응답 가능한지 확인하고 
+        액션큐 등록
+        불가능하면 폴드 처리하고 다음 유저에게 물어보는 루프로 바꿀 것
+        '''
         self.action_queue.append(self.start_order.popleft())
 
         while self.action_queue:
-            current_player = self.action_queue[0]                     
+
+            '''
+            while문 진입시마다, start_order에 있는 모든 클라이언트들 접속 중인지 응답 요청, 
+            접종된 유저는 모두 fold_users 처리
+
+            모든 클라이언트들에게 다음을 요청
+            1. 플롭 카드 전송 후 렌더링
+            2. start_order 에 있는 유저만 남기고 나머지 유저들 삭제 렌더링
+            '''
+
+            current_player = self.action_queue[0]             
 
             # not yet attacked
-            if self.attack_flags is False and self.prev_TOTAL <= self.players[current_player][stk_size]:
-                possible_actions = ["bet", "check", "raise", "fold", "all-in"] 
-
-            # not yet attacked
-            elif self.attack_flags is False and self.prev_VALID <= self.players[current_player][stk_size] < self.prev_TOTAL: 
-                possible_actions = ["bet", "check", "fold", "short-all-in"]
-            
-            # not yet attacked
-            elif self.attack_flags is False and self.players[current_player][stk_size] < self.prev_VALID:
-                possible_actions = ["check", "fold", "short-all-in"]
+            if self.attack_falgs == False:
+                if self.prev_VALID <= self.players[current_player]['stk_size']:
+                    possible_actions = ["bet", "check", "fold", "all-in"] 
+                
+                elif self.players[current_player]['stk_size'] < self.prev_VALID:
+                    possible_actions = ["check", "fold", "short-all-in"]
 
             # attacked
-            elif self.attack_flags is True and self.prev_TOTAL <= self.players[current_player][stk_size]: 
-                possible_actions = ["call", "raise", "fold", "all-in"]
-            # attacked
-            elif self.attack_flags is True and self.prev_VALID <= self.players[current_player][stk_size] < self.prev_TOTAL: 
-                possible_actions = ["call", "fold", "short-all-in"]
-            # attacked
-            elif self.attack_flags is True and self.players[current_player][stk_size] < self.prev_VALID:
-                possible_actions = ["fold", "short-all-in"]
-            
-            else:
-                pass
+            elif self.attack_falgs == True:
+                if self.raise_counter <= 5:
+                    if self.prev_TOTAL <= self.players[current_player]['stk_size']: 
+                        possible_actions = ["call", "raise", "fold", "all-in"]
+                    
+                    elif self.prev_VALID <= self.players[current_player]['stk_size'] < self.prev_TOTAL: 
+                        possible_actions = ["call", "fold", "short-all-in"]
+                    
+                    elif self.players[current_player]['stk_size'] < self.prev_VALID:
+                        possible_actions = ["fold", "short-all-in"]
+
+                    else:
+                        pass
+                else:
+                    if self.prev_TOTAL <= self.players[current_player]['stk_size']: 
+                        possible_actions = ["call", "fold", "all-in"]
+                    
+                    elif self.prev_VALID <= self.players[current_player]['stk_size'] < self.prev_TOTAL: 
+                        possible_actions = ["call", "fold", "short-all-in"]
+                    
+                    elif self.players[current_player]['stk_size'] < self.prev_VALID:
+                        possible_actions = ["fold", "short-all-in"]
+                    else:
+                        pass
+
+
 
             # current_player에 해당하는 클라이언트에게 possible_actions 전달, 응답 기다림       
             answer = input() # "레이즈는 {"raise" : raised_total} 형식으로. 
