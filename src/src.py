@@ -16,7 +16,7 @@ class Base:
 
         self.log_hand_actions = {"pre_flop" : [], "flop" : [], "turn" : [], "river" : []}
         self.log_hand_main_pots =  {"pre_flop" : None, "flop" : None, "turn" : None, "river" : None}
-        self.log_hand_cards = {"flop" : [], "turn" : [], "river" : [], "table_cards" : []} 
+        self.log_hand_cards = {"burned" : [], "flop" : [], "turn" : [], "river" : [], "table_cards" : []} 
 
         # user_id to position 딕셔너리 생성
         self.user2pos = self._assign_user2pos(user_id_list)
