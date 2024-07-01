@@ -1,6 +1,5 @@
 from src import Base
-from collections import deque
-from collections import OrderedDict
+from collections import deque, OrderedDict
 
 rings = 6  # robby 에서 전달 받음
 user_id_list = ['1', '2', '3', '4', '5', '6'] # robby 에서 전달 받음
@@ -26,6 +25,7 @@ class Dealer(Base):
 
         self.main_pot = 0
         self.pot_change = [self.main_pot]
+        self.all_in_counter = 0
         self.side_pot = False
         self.main_pot_confirmed = OrderedDict()
 
@@ -183,14 +183,14 @@ class Dealer(Base):
         # all_in_amount : 클라이언트에게서 전달받은 올인액수 (total을 의미)
         self.all_in_amount = answer['all-in']
 
-        def update_values(amount):
+        def _update_values(amount):
             self.LPFB = amount - self.prev_VALID
             self.prev_VALID = amount
             self.prev_TOTAL = self.prev_VALID + self.LPFB
 
         if street_name == 'pre_flop':
             if self.prev_TOTAL <= self.all_in_amount:
-                update_values(self.all_in_amount)
+                _update_values(self.all_in_amount)
             elif self.prev_VALID <= self.all_in_amount < self.prev_TOTAL:
                 self.prev_VALID = self.all_in_amount
                 self.prev_TOTAL = self.prev_VALID + self.LPFB
@@ -206,7 +206,7 @@ class Dealer(Base):
             # 해당 올인이 open-bet이 아닌 경우
             else:   
                 if self.prev_TOTAL <= self.all_in_amount:
-                    update_values(self.all_in_amount)
+                    _update_values(self.all_in_amount)
                 elif self.prev_VALID <= self.all_in_amount < self.prev_TOTAL:
                     self.prev_VALID = self.all_in_amount
                     self.prev_TOTAL = self.prev_VALID + self.LPFB
@@ -256,6 +256,7 @@ class Dealer(Base):
         if self.deep_stack_user_counter < 2:
             self.short_stack_end_flag == True
         
+        self.all_in_counter += 1
         # 사이드팟 생성
         self.side_pot = self._multi_pots(street_name)
 
@@ -282,8 +283,11 @@ class Dealer(Base):
                     pass
 
             self.main_pot_confirmed[all_in_position] = stake
-
-        return True  
+            
+            if self.all_in_counter >= 2:
+                return True
+            else: 
+                return False
               
     def _check(self, street_name, current_player):
         last_action = "check"
@@ -372,8 +376,8 @@ class Dealer(Base):
                 if position not in self.survivors:
                     self.start_order.popleft()
 
-    def _cards_face_up(self, street_name): 
-        self.log_hand_cards['burned'] = self.stub.pop(0) # 버닝
+    def _face_up_community_cards(self, street_name : str): 
+        self.log_hand_cards['burned'].append(self.stub.pop(0)) # 버닝
         if street_name == 'flop':
             for _ in range(3):
                 self.log_hand_cards[street_name].append(self.stub.pop(0))
@@ -381,8 +385,33 @@ class Dealer(Base):
             self.log_hand_cards[street_name].append(self.stub.pop(0))
 
         return self.log_hand_cards[street_name]
+    
+    def _face_up_community_cards_for_showdown(self, street_name :str) -> list :
 
-    def _prep_preFlop(self, street_name):
+        if street_name == 'pre_flop':
+            self._face_up_community_cards('flop')
+            self._face_up_community_cards('turn')
+            self._face_up_community_cards('river')
+        elif street_name == 'flop':
+            self._face_up_community_cards('turn')
+            self._face_up_community_cards('river')
+        elif street_name == 'turn':
+            self._face_up_community_cards('river')
+
+        self.log_hand_cards["table_cards"] = self.log_hand_cards["flop"] + self.log_hand_cards["turn"] + self.log_hand_cards["river"]
+        community_cards: list = self.log_hand_cards["table_cards"]
+
+        return community_cards
+    
+    def _face_up_user_hand(self):
+        user_hand = dict()
+        all_user = self.all_in_users + self.actioned_queue
+        for position in all_user:
+            starting_cards = self.players[position]['starting_cards']
+            user_hand[position] = starting_cards
+        return user_hand
+            
+    def _prep_preFlop(self, street_name, on_user_list):
 
         self._posting_blind()
         '''
@@ -404,14 +433,14 @@ class Dealer(Base):
         else:
             pass # 예외처리      
 
-    def _prep_street(self, street_name):
+    def _prep_street(self, street_name, on_user_list):
         
         self._initialize_betting_state()
         self._initialize_action_state()
         self._initialize_condition()
 
         self._reorder_start_member()
-        cards = self._cards_face_up()
+        cards = self._face_up_community_cards()
         '''
         서버에 요청
         on_user_list 변수에 접속 중인 클라이언트의 유저 아이디 요청
@@ -531,25 +560,25 @@ class Dealer(Base):
                 if len(self.fold_users) == self.this_street_players_num - 1:
                     self.winner_confirmed = True
                     self.user_card_open_first = True
-                    winner : list = self._showdown(street_name) # 1 모든 스타팅 카드 오픈 > 커뮤니티 카드 오픈 > 올인 유저 바로 승자처리
+                    winner = self._showdown(street_name) # 1 모든 스타팅 카드 오픈 > 커뮤니티 카드 오픈 > 올인 유저 바로 승자처리
 
                 # 올인 유저가 한명있고 콜 또는 폴드한 사람 있는 경우
                 elif len(self.all_in_users) == 1 and len(self.fold_users) + len(self.actioned_queue) == self.this_street_players_num - 1:
                     self.user_card_open_first = True
-                    winner : list = self._showdown(street_name) # 2 모든 스타팅 카드 오픈 > 커뮤니티 카드 오픈 > 랭킹비교 알고리즘으로 승자 처리
+                    winner = self._showdown(street_name) # 2 모든 스타팅 카드 오픈 > 커뮤니티 카드 오픈 > 랭킹비교 알고리즘으로 승자 처리
 
         # 핸드 종료조건 _all_in 함수
         # 모든 스트릿에서 모든 유저가 올인한 경우 (이전 스트릿에서 올인 있었든 없었든) 
         if self.every_all_in_end_flag:
             self.user_card_open_first = True
-            winner : list = self._showdown(street_name) # 3 모든 스타팅 카드 오픈 > 커뮤니티 카드 오픈 > 랭킹비교 알고리즘으로 승자 처리
+            winner = self._showdown(street_name) # 3 모든 스타팅 카드 오픈 > 커뮤니티 카드 오픈 > 랭킹비교 알고리즘으로 승자 처리
 
         # 핸드 종료조건 (현재 스트릿에서 올인이 발생하지 않은 경우) (이전 스트릿에서 올인 있었든 없었든) 
         # 모든 스트릿에서 베팅액션에 대해 모든 유저가 폴드한 경우
         if len(self.check_users) == 0 and len(self.actioned_queue) == 1 and len(self.fold_users) == start_member_num - 1:
             self.winner_confirmed = True
             self.table_card_open_first = True
-            winner : list = self._showdown(street_name) # 4 커뮤니티 카드 오픈 > 베팅 유저 바로 승자처리
+            winner = self._showdown(street_name) # 4 커뮤니티 카드 오픈 > 베팅 유저 바로 승자처리
 
         # 핸드 종료조건 (현재 스트릿에서 올인이 발생하지 않은 경우) (이전 스트릿에서 올인 있었든 없었든) 
         if street_name == 'river':
@@ -560,199 +589,304 @@ class Dealer(Base):
             # 마지막 베팅 액션에 대해 콜한 사람이 있을 경우  
             elif len(self.check_users) == 0 and len(self.actioned_queue) >= 2 and self.this_street_players_num > 1:
                 self.river_bet_exists = True
-                winner : list = self._showdown(street_name) # 6 커뮤니티 카드 오픈 > 리버에서 마지막 액션을 한 사람부터 베팅순서대로 카드 오픈
+                winner = self._showdown(street_name) # 6 커뮤니티 카드 오픈 > 리버에서 마지막 액션을 한 사람부터 베팅순서대로 카드 오픈
         
         if len(self.fold_users) == start_member_num:
             pass # 모든 클라이언트 폴드 또는 접속 종료 상태. 게임 기록 제거
 
-    def _compare_rank(self, user_cards, community_cards):
-        user_cards, community_cards
-        pass
+    def _compare_rank(self, user_cards : dict, community_cards : list) -> dict:
+
+        for position in user_cards:
+            pocket_cards = user_cards[position]
+            best_hands = self._make_best_hands(pocket_cards, community_cards)
+            self.log_best_hands[position] = best_hands
+
+        best_rank = 0
+        nuts_positions = []
+        for position, best_hands_dict in self.log_best_hands.items():
+            for rank, hand in best_hands_dict.items():
+                current_rank = self.hand_power.get(rank, 0)
+                if current_rank > best_rank:
+                    best_rank = current_rank
+                    nuts_positions = [position]
+                elif current_rank == best_rank:
+                    nuts_positions.append(position)
+
+        # 타이가 발생하는 경우 카드 랭크와 키커로 넛츠 판별. 무승부시 복수 넛츠 허용
+        if len(nuts_positions) > 1:
+            final_nuts_positions = self._resolve_ties(nuts_positions)
+            nuts_positions = final_nuts_positions
+
+        for position in nuts_positions:
+            self.log_nuts[position] = self.log_best_hands[position]
+
+        # 유저의 베스트 핸드를 랭크 순위대로 정렬하여 users_ranking 리스트 작성
+        self._users_ranking()
+
+        return self.log_nuts
 
     def _showdown(self, street_name):
         
-        def _tabling_user_cards():
-            user_hand = dict()
-            all_user = self.all_in_users + self.actioned_queue
-            for position in all_user:
-                starting_cards = self.players[position]['starting_cards']
-                user_hand[position] = starting_cards
-            return user_hand
-
-        self.log_hand_cards["table_cards"] = self.log_hand_cards["flop"] + self.log_hand_cards["turn"] + self.log_hand_cards["river"] 
-        community_cards : list = self.log_hand_cards["table_cards"]
+        community_cards : list = self._face_up_community_cards_for_showdown()
+        user_cards : dict = self._face_up_user_hand()
 
         if self.winner_confirmed:
              # 1 모든 스타팅 카드 오픈 > 커뮤니티 카드 오픈 > 올인 유저 바로 승자처리, 팟 어워드
             if self.user_card_open_first:
+
                 if street_name == 'pre_flop':
+                    user_cards
+                    self.log_hand_cards["burned"][0]
+                    self.log_hand_cards["flop"]
+                    self.log_hand_cards["burned"][1]
+                    self.log_hand_cards["turn"]
+                    self.log_hand_cards["burned"][2]
+                    self.log_hand_cards["river"]
                     '''
                     서버에 요청
-                    모든 클라이언트에게 유저카드 먼저 오픈 후 커뮤니티 카드 오픈, 승자 렌더링
+                    모든 클라이언트에게 유저카드 먼저 오픈 후 
+                    커뮤니티 카드 버닝, 플롭, 버닝, 턴, 버닝, 리버 순서로 렌더링 요청
                     '''
-                    user_cards : dict = _tabling_user_cards()
-                    community_cards
-
                 elif street_name == 'flop':
+                    user_cards
+                    self.log_hand_cards["burned"][1]
+                    self.log_hand_cards["turn"]
+                    self.log_hand_cards["burned"][2]
+                    self.log_hand_cards["river"]                    
                     '''
                     서버에 요청
-                    모든 클라이언트에게 유저카드 먼저 오픈 후 커뮤니티 카드 오픈, 승자 렌더링
+                    모든 클라이언트에게 유저카드 먼저 오픈 후 
+                    커뮤니티 카드 버닝, 턴, 버닝, 리버 순서로 렌더링 요청
                     '''                   
-                    user_cards : dict = _tabling_user_cards()
-                    community_cards
-
                 elif street_name == 'turn':
+                    user_cards
+                    self.log_hand_cards["burned"][2]
+                    self.log_hand_cards["river"]     
                     '''
                     서버에 요청
-                    모든 클라이언트에게 유저카드 먼저 오픈 후 커뮤니티 카드 오픈, 승자 렌더링
+                    모든 클라이언트에게 유저카드 먼저 오픈 후 
+                    커뮤니티 카드 버닝, 리버 순서로 렌더링 요청
                     '''                    
-                    user_cards :dict = _tabling_user_cards()
-                    community_cards
-
                 elif street_name == 'river':
+                    user_cards
                     '''
                     서버에 요청
-                    모든 클라이언트에게 유저카드 먼저 오픈 후 커뮤니티 카드 오픈, 승자 렌더링
-                    '''                    
-                    user_cards : dict = _tabling_user_cards()
-                    community_cards
-
+                    모든 클라이언트에게 유저카드 오픈 렌더링
+                    '''          
                 if self.side_pot:
-                    winner : list = self._pot_award(pot = self.main_pot_confirmed, winner = self.all_in_users)
+                    # 랭크 비교 알고리즘 실행
+                    winner = self._compare_rank(user_cards, community_cards)
+                    winner = self._pot_award(self.main_pot_confirmed, winner)
                     return winner
+                # 1의 경우 사이드 팟이 없으면 승자는 마지막 베팅 유저로 바로 확정
                 elif not self.side_pot: 
-                    winner : list = self._pot_award(pot = self.main_pot, winner = self.all_in_users)
+                    winner = self._pot_award(pot = self.main_pot, winner = self.all_in_users)
                     return winner
+                
             # 4 커뮤니티 카드 오픈 > 베팅 유저 바로 승자처리, 팟 어워드
             elif self.table_card_open_first:
                 if street_name == 'pre_flop':
-                    '''
-                    서버에 요청
-                    모든 클라이언트에게 커뮤니티 카드 먼저 오픈 후 유저 카드 오픈, 승자 렌더링
-                    '''
-                    user_cards : dict = _tabling_user_cards()
-                    community_cards
-
+                    self.log_hand_cards["burned"][0]
+                    self.log_hand_cards["flop"]
+                    self.log_hand_cards["burned"][1]
+                    self.log_hand_cards["turn"]
+                    self.log_hand_cards["burned"][2]
+                    self.log_hand_cards["river"]
+                    
+                    if self.side_pot == True:
+                        user_cards
+                        card_open_order = self.actioned_queue
+                        '''
+                        서버에 요청
+                        모든 클라이언트에게 커뮤니티 카드 버닝, 플롭, 버닝, 턴, 버닝, 리버 순서로 오픈후
+                        모든 유저카드 오픈 렌더링 요청 (이전 스트릿에서 올인이 있었으므로. 오픈 순서는 마지막 스트릿의 베팅 유저부터)
+                        '''
+                        pass
+                    else:
+                        '''
+                        서버에 요청
+                        모든 클라이언트에게 커뮤니티 카드 버닝, 플롭, 버닝, 턴, 버닝, 리버 순서로 오픈 렌더링 요청
+                        유저 카드는 오픈하지 않음 (이전 스트릿에서 올인이 없었으므로)
+                        '''
+                        pass
                 elif street_name == 'flop':
-                    '''
-                    서버에 요청
-                    모든 클라이언트에게 커뮤니티 카드 먼저 오픈 후 유저 카드 오픈, 승자 렌더링
-                    '''                   
-                    user_cards : dict = _tabling_user_cards()
-                    community_cards
-
+                    self.log_hand_cards["burned"][1]
+                    self.log_hand_cards["turn"]
+                    self.log_hand_cards["burned"][2]
+                    self.log_hand_cards["river"]
+                                       
+                    if self.side_pot == True:
+                        user_cards
+                        '''
+                        서버에 요청
+                        모든 클라이언트에게 커뮤니티 카드 버닝, 턴, 버닝, 리버 순서로 오픈후
+                        모든 유저카드 오픈 렌더링 요청 (이전 스트릿에서 올인이 있었으므로. 오픈 순서는 마지막 스트릿의 베팅 유저부터)
+                        '''
+                        pass
+                    else:
+                        '''
+                        서버에 요청
+                        모든 클라이언트에게 커뮤니티 카드 버닝, 턴, 버닝, 리버 순서로 오픈 렌더링 요청
+                        유저 카드는 오픈하지 않음 (이전 스트릿에서 올인이 없었으므로)
+                        '''
+                        pass               
                 elif street_name == 'turn':
-                    '''
-                    서버에 요청
-                    모든 클라이언트에게 커뮤니티 카드 먼저 오픈 후 유저 카드 오픈, 승자 렌더링
-                    '''                    
-                    user_cards :dict = _tabling_user_cards()
-                    community_cards
-
+                    user_cards
+                    self.log_hand_cards["burned"][2]
+                    self.log_hand_cards["river"]     
+                    if self.side_pot == True:
+                        user_cards
+                        '''
+                        서버에 요청
+                        모든 클라이언트에게 커뮤니티 카드 버닝, 리버 순서로 오픈후
+                        모든 유저카드 오픈 렌더링 요청 (이전 스트릿에서 올인이 있었으므로. 오픈 순서는 마지막 스트릿의 베팅 유저부터)
+                        '''
+                        pass
+                    else:
+                        '''
+                        서버에 요청
+                        모든 클라이언트에게 커뮤니티 카드 버닝, 리버 순서로 오픈 렌더링 요청
+                        유저 카드는 오픈하지 않음 (이전 스트릿에서 올인이 없었으므로)
+                        '''
+                        pass              
                 elif street_name == 'river':
-                    '''
-                    서버에 요청
-                    모든 클라이언트에게 커뮤니티 카드 먼저 오픈 후 유저 카드 오픈, 승자 렌더링
-                    '''                    
-                    user_cards : dict = _tabling_user_cards()
-                    community_cards
+                    user_cards
+                    if self.side_pot == True:
+                        user_cards
+                        '''
+                        서버에 요청
+                        모든 유저카드 오픈 렌더링 요청 (이전 스트릿에서 올인이 있었으므로. 오픈 순서는 마지막 스트릿의 베팅 유저부터)
+                        '''
+                        pass
+                    else:
+                        '''
+                        유저 카드는 오픈하지 않음 (이전 스트릿에서 올인이 없었으므로)
+                        '''
+                        pass
                 if self.side_pot:
-                    winner : list = self._pot_award(pot = self.main_pot_confirmed, winner = self.actioned_queue)
+                    # 랭크 비교 알고리즘 실행
+                    winner = self._compare_rank(user_cards, community_cards)
+                    winner = self._pot_award(self.main_pot_confirmed, winner)
                     return winner
+                # 4의 경우 사이드 팟이 없으면 승자는 마지막 베팅 유저로 바로 확정
                 elif not self.side_pot: 
-                    winner : list = self._pot_award(pot = self.main_pot, winner = self.actioned_queue)
+                    winner = self._pot_award(pot = self.main_pot, winner = self.actioned_queue)
                     return winner
         else: 
             # 2, 3 모든 스타팅 카드 오픈 > 커뮤니티 카드 오픈 > 랭킹비교 알고리즘으로 승자 처리, 팟 어워드
             if self.user_card_open_first:  
                 if street_name == 'pre_flop':
+                    user_cards
+                    self.log_hand_cards["burned"][0]
+                    self.log_hand_cards["flop"]
+                    self.log_hand_cards["burned"][1]
+                    self.log_hand_cards["turn"]
+                    self.log_hand_cards["burned"][2]
+                    self.log_hand_cards["river"]
                     '''
                     서버에 요청
-                    모든 클라이언트에게 유저 카드 먼저 오픈 후 커뮤니티 카드 오픈, 승자 렌더링
-                    '''                    
-                    user_cards : dict = _tabling_user_cards()
-                    community_cards
-                    winner = self._compare_rank(user_cards, community_cards)
-
+                    모든 클라이언트에게 유저카드 먼저 오픈 후 
+                    커뮤니티 카드 버닝, 플롭, 버닝, 턴, 버닝, 리버 순서로 렌더링 요청
+                    '''
                 elif street_name == 'flop':
+                    user_cards
+                    self.log_hand_cards["burned"][1]
+                    self.log_hand_cards["turn"]
+                    self.log_hand_cards["burned"][2]
+                    self.log_hand_cards["river"]                    
                     '''
                     서버에 요청
-                    모든 클라이언트에게 유저 카드 먼저 오픈 후 커뮤니티 카드 오픈, 승자 렌더링
-                    '''                            
-                    user_cards : dict = _tabling_user_cards()
-                    community_cards
-                    winner = self._compare_rank(user_cards, community_cards)
-
+                    모든 클라이언트에게 유저카드 먼저 오픈 후 
+                    커뮤니티 카드 버닝, 턴, 버닝, 리버 순서로 렌더링 요청
+                    '''          
                 elif street_name == 'turn':
+                    user_cards
+                    self.log_hand_cards["burned"][2]
+                    self.log_hand_cards["river"]     
                     '''
                     서버에 요청
-                    모든 클라이언트에게 유저 카드 먼저 오픈 후 커뮤니티 카드 오픈, 승자 렌더링
-                    '''                            
-                    user_cards :dict = _tabling_user_cards()
-                    community_cards
-                    winner = self._compare_rank(user_cards, community_cards)
-
+                    모든 클라이언트에게 유저카드 먼저 오픈 후 
+                    커뮤니티 카드 버닝, 리버 순서로 렌더링 요청
+                    '''           
                 elif street_name == 'river':
+                    user_cards
                     '''
                     서버에 요청
-                    모든 클라이언트에게 유저 카드 먼저 오픈 후 커뮤니티 카드 오픈, 승자 렌더링
-                    '''                            
-                    user_cards : dict = _tabling_user_cards()
-                    community_cards
-                    winner = self._compare_rank(user_cards, community_cards)                
-
+                    모든 클라이언트에게 유저카드 오픈 렌더링
+                    '''                  
+                # 랭크 비교 알고리즘 실행
+                # 2, 3 의 경우 사이드팟이 있건 없건 스트릿 종료후 라이브 플레이어가 둘 이상이므로 랭킹 비교 실행 필요
+                winner = self._compare_rank(user_cards, community_cards)
                 if self.side_pot:
-                    winner : list = self._pot_award(pot = self.main_pot_confirmed, winner = winner)
+                    winner = self._pot_award(self.main_pot_confirmed, winner= winner)
                     return winner
                 elif not self.side_pot: 
-                    winner : list = self._pot_award(pot = self.main_pot, winner = winner)
+                    winner = self._pot_award(pot = self.main_pot, winner = winner)
                     return winner
             elif self.table_card_open_first:
                 # 5 커뮤니티 카드 오픈 > 리버에서 액션했던 순서대로 유저 카드오픈 > 랭킹비교 알고리즘으로 승자 처리, 팟 어워드
                 if self.river_all_check: 
+                    user_cards
+                    card_open_order = self.check_users                   
                     '''
                     서버에 요청 self.actioned_queue
-                    모든 클라이언트에게 커뮤니티 카드 먼저 오픈 후, 리버에서 먼저 액션을 한 사람부터 카드 오픈, 승자 렌더링
+                    리버에서 먼저 체크 액션을 한 사람부터 카드 오픈
                     '''
-                    user_cards : dict = _tabling_user_cards()
-                    community_cards
-                    card_open_order = self.check_users
+                    # 랭크 비교 알고리즘 실행
                     winner = self._compare_rank(user_cards, community_cards)      
 
                     if self.side_pot:
-                        winner : list = self._pot_award(pot = self.main_pot_confirmed, winner = winner)
+                        winner = self._pot_award(pot = self.main_pot_confirmed, winner = winner)
                         return winner
                     elif not self.side_pot: 
-                        winner : list = self._pot_award(pot = self.main_pot, winner = winner)
+                        winner = self._pot_award(pot = self.main_pot, winner = winner)
                         return winner
                 # 6 커뮤니티 카드 오픈 > 리버에서 마지막 액션을 한 사람부터 베팅순서대로 카드 오픈 > 랭킹비교 알고리즘으로 승자 처리, 팟 어워드        
                 elif self.river_bet_exists:
+                    user_cards
+                    card_open_order = self.actioned_queue                    
                     '''
                     서버에 요청 
-                    모든 클라이언트에게 커뮤니티 카드 먼저 오픈 후, 리버에서 마지막 액션을 한 사람부터 카드 오픈, 승자 렌더링
+                    모든 클라이언트에게 커뮤니티 카드 먼저 오픈 후, 리버에서 마지막 베팅 액션을 한 사람부터 카드 오픈
                     '''
-                    user_cards : dict = _tabling_user_cards()
-                    community_cards
-                    card_open_order = self.actioned_queue
+                    # 랭크 비교 알고리즘 실행
                     winner = self._compare_rank(user_cards, community_cards)      
 
                     if self.side_pot:
-                        winner : list = self._pot_award(pot = self.main_pot_confirmed, winner = winner)
+                        winner = self._pot_award(pot = self.main_pot_confirmed, winner = winner)
                         return winner
                     elif not self.side_pot: 
-                        winner : list = self._pot_award(pot = self.main_pot, winner = winner)
+                        winner = self._pot_award(pot = self.main_pot, winner = winner)
                         return winner
     
     def _pot_award(self, pot, winner):
+
         if winner > 1:
+            '''
+            승자가 현재 스트릿에서 이긴 유저인 경우
+
+            승자가 이전 스트릿에서 올인 한 유저인 경우
+            '''
             for position in winner:
                 self.players[position]['stk_size'] += self.main_pot_confirmed[position]
         else:
-            self.players[winner[0]]['stk_size'] += pot
+            '''
+            승자가 현재 스트릿에서 이긴 유저인 경우
+                메인팟을 승자가 모두 가져간다.
+                self.players[winner[0]]['stk_size'] += pot
+
+            승자가 이전 스트릿에서 올인 한 유저인 경우
+                해당 스트릿에서 만들어진 메인팟만 가져가고
+                self.players[winner[0]]['stk_size'] += self.main_pot_confirmed[winner[0]]
+                현재 스트릿에서 쇼다운 2위 랭킹부터  
+            '''
+            
         '''
         서버에 요청
+        승자 연출 렌더링 winner 딕셔너리의 키가 winner의 포지션
         모든 클라이언트에게 승자의 업데이트 된 스택사이즈 렌더링
         '''
+
 
     def _finishing_street(self, street_name):
         self.log_hand_main_pots[street_name] = self.main_pot
