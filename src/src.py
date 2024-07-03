@@ -1,6 +1,6 @@
 import random
 from itertools import combinations
-from collections import OrderedDict, defaultdict, Counter
+from collections import OrderedDict, defaultdict, Counter, deque
 
 class Base:
     
@@ -17,12 +17,13 @@ class Base:
         self.SB, self.BB = self._blind_post()
 
         self.log_hand_actions = {"pre_flop" : [], "flop" : [], "turn" : [], "river" : []}
-        self.log_hand_main_pots =  {"pre_flop" : None, "flop" : None, "turn" : None, "river" : None}
+        
         self.log_hand_cards = {"burned" : [], "flop" : [], "turn" : [], "river" : [], "table_cards" : []} 
         
-        self.log_best_hands = OrderedDict() # live_hands 의 best_hands를 모은 딕셔너리
+        self.log_best_hands = OrderedDict() # 쇼다운하여 모든 live_hands 의 best_hands의 랭크 이름과 해당 카드 조합 및 키커를 포지션별로 모은 딕셔너리
         self.log_nuts = {} # best_hands 중 가장 강력한 핸드를 담은 딕셔너리
         self.log_users_ranking = None # 유저 랭킹 리스트
+        self.tie_flag = False  # 무승부 플래그 초기화
 
         # user_id to position 딕셔너리 생성
         self.user2pos = self._assign_user2pos(user_id_list)
@@ -109,7 +110,9 @@ class Base:
         players, stub = self._dealing_cards(players, shuffled_deck)
 
         return players, stub
-    
+##########################################################################
+#                          AUXILIARY SHOWDOWN
+##########################################################################       
     def _card_rank(self, card):
             return self.card_rank_order.index(card[0])
 
@@ -124,7 +127,7 @@ class Base:
                 return True
         return False
     
-    def classify_hand(self, cards, pocket_cards):
+    def _classify_hand(self, cards, pocket_cards):
         cards = sorted(cards, key=self._card_rank, reverse=True)
         ranks = [card[0] for card in cards]
         rank_counts = Counter(ranks)
@@ -186,7 +189,7 @@ class Base:
         live_hands = pocket_cards + community_cards
 
         for combo in combinations(live_hands, 5):
-            rank_name, hand = self.classify_hand(list(combo), pocket_cards)
+            rank_name, hand = self._classify_hand(list(combo), pocket_cards)
             rank_value = self.hand_power[rank_name]
             if rank_value > best_rank_value:
                 best_rank_name = rank_name
@@ -210,7 +213,7 @@ class Base:
         best_kicker = best_kicker[:kicker_mapping.get(best_rank_name, 0)]
 
         return {best_rank_name: best_hand, "kicker": best_kicker}
-    
+
     def _resolve_ties(self, nuts_positions):
         if len(nuts_positions) <= 1:
             return nuts_positions
@@ -241,6 +244,8 @@ class Base:
             best_hands = [hand for hand in best_hands if self._card_rank(hand[best_rank_name][i]) == max_rank]
             if len(best_hands) == 1:
                 break
+        else:
+            self.tie_flag = True  # 핸드 비교 후에도 무승부일 때 플래그 설정
 
         # 핸드가 모두 동일한 경우 키커 비교
         if len(best_hands) > 1 and any(hand['kicker'] for hand in best_hands):
@@ -250,16 +255,55 @@ class Base:
                 best_hands = [hand for hand in best_hands if len(hand['kicker']) > i and self._card_rank(hand['kicker'][i]) == max_kicker_rank]
                 if len(best_hands) == 1:
                     break
+            else:
+                self.tie_flag = True  # 키커 비교 후에도 무승부일 때 플래그 설정
 
         # 최종 넛츠 포지션 반환
         final_nuts_positions = [pos for pos in nuts_positions if self.log_best_hands[pos] in best_hands]
+
         return final_nuts_positions
 
-    def _users_ranking(self):
+    def _users_ranking(self) -> list:
         positions = list(self.log_best_hands.keys())
-        self.log_users_ranking = sorted(positions, key=lambda pos: (
+        users_ranking_list = sorted(positions, key=lambda pos: (
             self.hand_power[next(iter(self.log_best_hands[pos]))],
             [self._card_rank(card) for card in self.log_best_hands[pos][next(iter(self.log_best_hands[pos]))]],
             [self._card_rank(card) for card in self.log_best_hands[pos]['kicker']]
         ), reverse=True)
+        
+        tied_players = []
+        ranked_users = []
+
+        previous_key = None
+        current_tie_group = []
+
+        for pos in users_ranking_list:
+            current_key = (
+                self.hand_power[next(iter(self.log_best_hands[pos]))],
+                [self._card_rank(card) for card in self.log_best_hands[pos][next(iter(self.log_best_hands[pos]))]],
+                [self._card_rank(card) for card in self.log_best_hands[pos]['kicker']]
+            )
+
+            if previous_key is not None and current_key == previous_key:
+                current_tie_group.append(pos)
+            else:
+                if current_tie_group:
+                    tied_players.append(tuple(current_tie_group))
+                    current_tie_group = []
+                current_tie_group.append(pos)
+
+            previous_key = current_key
+
+        if current_tie_group:
+            tied_players.append(tuple(current_tie_group))
+
+        for group in tied_players:
+            if len(group) == 1:
+                ranked_users.append(group[0])
+            else:
+                ranked_users.append(group)
+
+        self.log_users_ranking = ranked_users
+        users_ranking = deque(ranked_users).copy()
+        return users_ranking
 
