@@ -92,24 +92,21 @@ class Base:
 
     def _initialize_players(self, user_id_list, stk_size, shuffled_deck):
         positions = self._shuffle_positions(self._get_positions(self.rings)) 
-        players = {position: {"user_id": user_id} for position, user_id in zip(positions, user_id_list)}
-        # 각 user_id에 해당하는 stk_size 값을 players 딕셔너리에 추가합니다.
-        for position, info in players.items():
-            user_id = info['user_id']
-            players[position]['stk_size'] = stk_size[user_id]
-            players[position]['starting_cards'] = []
-
-            # "betting_size" 에 적히는 값들은 항상 total을 의미
-            players[position]['actions'] = {
-                "pre_flop": {"action_list" : [], "betting_size": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]}},
-                "flop": {"action_list" : [], "betting_size": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]}},
-                "turn": {"action_list" : [], "betting_size": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]}},
-                "river": {"action_list" : [], "betting_size": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]}},
+        players = {position: {
+            "user_id": user_id,
+            "stk_size": stk_size[user_id],
+            "starting_cards": [],
+            "actions": {
+                street: {"action_list": [], 
+                         "pot_contribution": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]},
+                         "betting_size_total": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]} }
+                for street in ["pre_flop", "flop", "turn", "river"]
             }
+        } for position, user_id in zip(positions, user_id_list)}
         
         players, stub = self._dealing_cards(players, shuffled_deck)
-
         return players, stub
+
 ##########################################################################
 #                          AUXILIARY SHOWDOWN
 ##########################################################################       
@@ -263,13 +260,23 @@ class Base:
 
         return final_nuts_positions
 
+    def _hand_key(self, position):
+        hand_name = next(iter(self.log_best_hands[position]))
+        hand_combinations = self.log_best_hands[position][hand_name]
+        card_ranks = [self._card_rank(card) for card in hand_combinations]
+        kicker_ranks = [self._card_rank(card) for card in self.log_best_hands[position].get('kicker', [])]
+        return (self.hand_power[hand_name], card_ranks, kicker_ranks)
+
     def _users_ranking(self) -> list:
+        '''
+        쇼다운 결과 커뮤니티 카드 5장과 유저의 스타팅 카드 2장으로 만들수 있는
+        베스트 핸드들의 딕셔너리 self.log_best_hands를 받아서
+        핸드 랭크 이름으로 먼저 비교하고, 이름이 같으면 핸드를 이루는 카드 조합의 카드 랭크를 앞에서부터 순서대로 비교하고, 카드 랭크도 같으면 키커가 있는 경우 키커까지 비교해서
+        핸드의 파워가 강력한 순서로 해당 핸드를 가진 유저의 포지션을 내림차순 정렬하고,
+        키커까지 모두 똑같아서 무승부인 유저들은 튜플로 묶은 리스트를 반환하는 함수
+        '''
         positions = list(self.log_best_hands.keys())
-        users_ranking_list = sorted(positions, key=lambda pos: (
-            self.hand_power[next(iter(self.log_best_hands[pos]))],
-            [self._card_rank(card) for card in self.log_best_hands[pos][next(iter(self.log_best_hands[pos]))]],
-            [self._card_rank(card) for card in self.log_best_hands[pos]['kicker']]
-        ), reverse=True)
+        users_ranking_list = sorted(positions, key=lambda position: self._hand_key(position), reverse=True)
         
         tied_players = []
         ranked_users = []
@@ -278,11 +285,7 @@ class Base:
         current_tie_group = []
 
         for pos in users_ranking_list:
-            current_key = (
-                self.hand_power[next(iter(self.log_best_hands[pos]))],
-                [self._card_rank(card) for card in self.log_best_hands[pos][next(iter(self.log_best_hands[pos]))]],
-                [self._card_rank(card) for card in self.log_best_hands[pos]['kicker']]
-            )
+            current_key = self._hand_key(pos)
 
             if previous_key is not None and current_key == previous_key:
                 current_tie_group.append(pos)
@@ -306,4 +309,3 @@ class Base:
         self.log_users_ranking = ranked_users
         users_ranking = deque(ranked_users).copy()
         return users_ranking
-
