@@ -2,12 +2,6 @@ from src import Base
 from collections import deque, OrderedDict, defaultdict
 import sys
 
-rings = 6  # robby 에서 전달 받음
-user_id_list = ['1', '2', '3', '4', '5', '6'] # robby 에서 전달 받음
-stakes = "low"   # robby 에서 전달 받음
-stk_size = {'1' : 100, '2' : 100, '3' : 100, '4' : 100, '5' : 100, '6' : 100}  # SQL DB에서 전달 받음
-
-
 class Dealer(Base):
 
     def __init__(self, user_id_list, stk_size, rings, stakes):
@@ -24,10 +18,10 @@ class Dealer(Base):
 
         self.main_pot_cumulative = 0
         self.pot_change = [self.main_pot_cumulative]
-        self.side_pot = False # 모든 스트릿 포함 최초 올인 발생시 True
-        self.main_pot_confirmed = defaultdict(dict)
 
-        # 필요한 키들을 수동으로 설정합니다.
+        self.side_pot = False # 모든 스트릿 포함 최초 올인 발생시 True. 필요한 플래그일까? 검토필요
+
+        self.main_pot_confirmed = defaultdict(dict)
         self.main_pot_confirmed["pre_flop"] = {}
         self.main_pot_confirmed["flop"] = {}
         self.main_pot_confirmed["turn"] = {}
@@ -41,14 +35,14 @@ class Dealer(Base):
 
     def _initialize_betting_state(self):
         self.raised_total = 0 # 클라이언트로부터 전달받는 데이터, 전달 받을 때마다 갱신
-        self.all_in_amount = 0   # 클라이언트로부터 전달받는 데이터, 전달 받을 때마다 갱신
         self.bet_amount = 0 # 클라이언트로부터 전달받는 데이터, 전달 받을 때마다 갱신
+        self.all_in_amount = 0   
 
         self.LPFB = self.BB # the largest prior full bet = the last legal increment = minimum raise
         self.prev_VALID = self.BB  # 콜시 유저의 스택에 남아 있어야 하는 최소 스택 사이즈의 기준
         self.prev_TOTAL = self.prev_VALID + self.LPFB # 레이즈시 유저의 스택에 남아있어야 하는 최소 스택 사이즈의 기준
 
-        self.street_pot = 0 # 해당 스트릿에서만 발생한 베팅 총액
+        self.street_pot = 0 # 해당 스트릿에서만 발생한 베팅 총액, 필요한 변수일까? 검토 필요
 
     def _initialize_action_state(self):
         self.action_queue = deque([])
@@ -58,20 +52,19 @@ class Dealer(Base):
         
         self.check_users = list()
         self.attack_flag = False # only only and just once bet, raise, all-in is True  # 플롭부터는 False로 초기화
-        self.raise_counter = 0 # 5가 되면 Possible action 에서 raise 삭제. 구현 필요
-        self.reorder_flag = True # 현재 액션 유저를 기준으로 actioned_queue에 있는 유저들을 start_order 리스트 뒤에 붙이는 reorder를 금지시키기 위한 플래그
+        self.raise_counter = 0 # 5가 되면 Possible action 에서 raise 삭제
+        self.reorder_flag = True # 언더콜인 올인 발생시 actioned_queue에 있는 유저들을 start_order 리스트 뒤에 붙이는 reorder를 금지시키기 위한 플래그
 
     def _initialize_conditions(self):
         self.deep_stack_user_counter = 0
         self.short_stack_end_flag = False # 올인 발생시 딥스택 유저 수 부족으로 바로 핸드 종료시키는 조건
 
-        self.winner_confirmed = False
         self.user_card_open_first = False # TDA Rule 16 : Face Up for All
         self.table_card_open_first = False
         self.table_card_open_only = False # TDA Rule 18 : Asking to See a Hand
 
-        self.river_all_check = False
-        self.river_bet_exists = False
+        self.river_all_check = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
+        self.river_bet_exists = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
 
         self.survivors = list() # 다음 스트릿으로 갈 생존자 리스트
 
@@ -262,7 +255,7 @@ class Dealer(Base):
         메인팟 사이즈를 raised_total을 더한 결과로 렌더링
         '''
     
-    def _all_in(self, street_name, current_player, answer):
+    def _all_in(self, street_name, current_player):
 
         if current_player in self.check_users:
             self.check_users.remove(current_player)
@@ -372,12 +365,20 @@ class Dealer(Base):
             
             for all_in_position in self.all_in_users:
                 self.main_pot_confirmed[street_name][all_in_position] = 0
-                for position in all_user:
-                    path = self.players[position]["actions"][street_name]
-                    # 개별 올인 유저의 "해당 스트릿에서의" 메인팟에 대한 지분
-                    stake = sum_pot_contributions(path)
-                    self.main_pot_confirmed[street_name][all_in_position] += stake
-                    # 플롭 이후 스트릿에서 올인을 했다면, 그의 지분은 그 스트릿에서의 자기 올인에 대한 지분에 직전 스트릿까지의 팟 총액을 더해야 한다.
+                # 올인 유저들의 "해당 스트릿에서의" 메인팟에 대한 지분
+                all_in_user_stake = 0
+                all_in_user_path = self.players[all_in_position]["actions"][street_name]
+                all_in_user_pot_contribution = sum_pot_contributions(all_in_user_path)
+                
+                # 해당 스트릿에서의 모든 유저의 팟 기여도
+                user_contributions = {position: sum_pot_contributions(self.players[position]["actions"][street_name]) for position in all_user}
+                
+                for _ , contribution in user_contributions.items():
+                    all_in_user_stake += min(contribution, all_in_user_pot_contribution)
+                
+                self.main_pot_confirmed[street_name][all_in_position] = all_in_user_stake
+                
+                # 플롭 이후 스트릿에서 올인을 했다면, 그의 지분은 그 스트릿에서의 자기 올인에 대한 지분에 직전 스트릿까지의 팟 총액을 더해야 한다.
                 if street_name != "pre_flop":
                     prev_street = self.street_name[self.street_name.index(street_name) - 1]
                     prev_pot_cumulative = self.main_pot_confirmed[prev_street][prev_street]
@@ -425,20 +426,19 @@ class Dealer(Base):
             # 마지막 남은 유저 1명이 올인 유저인 경우
             if (len(self.all_in_users_total) == 1 and self.all_in_users):
                 self.winner_confirmed = True
-                self.user_card_open_first = False
                 self.table_card_open_first = True
                 self.table_card_open_only = True                
                 return True
             
             # 마지막 남은 유저 1명이 올인 유저가 아닌 베팅 유저인 경우
             if not self.all_in_users_total and self.actioned_queue:
+                self.winner_confirmed = False
                 self.table_card_open_first = True
                 self.table_card_open_only = True
                 return True
         
         # 올인에 콜할수 있는 유저가 1명 뿐인 경우
         if self.short_stack_end_flag:
-            self.winner_confirmed = True
             return True
 
         # 모두 올인 또는 한명 빼고 전부 올인한 경우
@@ -447,11 +447,12 @@ class Dealer(Base):
         
         # 현재 스트릿이 리버인 경우
         if street_name == 'river':
-            if not self.user_card_open_first:
-                self.table_card_open_first = True
-            
-            self.river_all_check = True
-            self.river_bet_exists = True
+            if len(self.actioned_queue) == len(self.check_users):
+                self.river_all_check = True
+            if len(self.check_users) == 0:
+                self.river_bet_exists = True
+                if len(self.fold_users) == self.rings - 1:
+                    self.table_card_open_only = True
             return True
         
 
@@ -546,13 +547,12 @@ class Dealer(Base):
             community_cards_open_order
             위 변수를 인자로 전달
             '''
-        elif self.table_card_open_first and street_name == 'river':
+        elif street_name == 'river':
             if self.river_all_check:
                 pass
                 '''
                 서버에 요청
                 리버에서 체크했던 순서대로 클라이언트 카드 오픈
-                TDA Rule 7:Non All-In Showdowns and Showdown Order
                 self.check_users 
                 위 변수를 인자로 전달
                 '''
@@ -568,23 +568,70 @@ class Dealer(Base):
                 리버에서 마지막으로 베팅액션을 한 클라이언트부터 딜링 방향으로 카드 오픈
                 self.survivors 
                 위 변수를 인자로 전달
-                TDA Rule 7:Non All-In Showdowns and Showdown Order
                 '''
             pass
 
         return users_ranking
 
-    # def _pot_award(self, street_name, users_ranking):
+    def _pot_award(self, street_name, users_ranking):
         '''
         TDA Rule 20: Awarding Odd Chips
         팟 분배후 칩이 남는 경우
         하이 핸드 또는 로우 핸드가 두 개 이상인 경우 : 나머지 칩은 버튼에서 왼쪽으로 가장 가까운 플레이어에게 수여
         하이/로우 스플릿의 경우 : 전체 팟이 홀수인 경우 나머지 칩은 하이 팟에 넣는다
-        '''
-        '''
-        self.side_pot = True
-        self.winner_confirmed = True
-        위 두가지 변수만 고려
+
+        
+        self.side_pot = True  필요할까?  검토 필요
+        self.winner_confirmed = True  1명 제외 모두 폴드한 경우는 팟 분배 쉬워지므로 사용할 가치 있을지도. 하지만 필요할까? 검토 필요
+       
+
+        
+        올인유저는 어느 스트릿에서든 나올 수 있다.
+        맨 마지막까지 진행된 스트릿에서 이긴 사람은 올인으로 이기든 그냥 이기든 팟 전부를 가져간다. 이 경우 무승부라면 팟을 나누고 무승부가 아니면 다 가져간다.
+
+        그 이전 스트릿에서 승자가 나오는 경우는 올인 유저밖에 없다. 그의 지분은 이미 계산되어 있다. 이 경우에만 메인 팟에서 올인 유저의 지분을 뺴고 나머지가 생긴다.
+        이 경우에 무승부가 발생하는 경우
+        이전 스트릿의 올인 유저와 그 스트릿과 같은 스트릿에서 올인한 유저가 무승부인 경우: 
+            이 경우 이미 올인 유저의 지분을 다 계산했으므로 그걸 사용한다.지분이 같은 경우 팟을 등분하고 나머지가 생기면 나눈다
+            지분이 다른 경우
+        이전 스트릿의 올인 유저와 다른 스트릿의 올인 유저가 무승부인 경우 : 
+            이 경우는 이미 올인유저의 지분을 다 계산했으므로 그걸 사용한다. 지분이 같은 경우 팟을 등분하고 나머지가 생기면 나눈다.
+            지분이 다른 경우
+        이전 스트릿의 올인 유저와 마지막 스트릿의 그냥 유저가 무승부인 경우 : 
+            이 경우는 올인 유저의 지분은 계산한걸 사용하고 마지막 스트릿의 유저의 지분은 전체팟이에 해당한다.
+            올인 유저의 지분이 마지막 스트릿 유저의 지분보다 적은 경우
+            500 : 700 인 경우
+            700의 절반인 350을 등분한다.
+            전체팟의 절반보다 올인 유저의 지분이 적은 경우
+            300 : 700 인 경우
+            올인 유저의 지분을 먼저 배분하고 나머지는 전부 마지막 스트릿 유저에게 준다.
+
+        이전 스트릿의 올인유저와 마지막 스트릿의 그냥유저와 다른 스트릿의 올인유저 3명이 무승부인 경우
+        이전 스트릿의 올인 유저와 그 스트릿과 같은 스트릿에서 올인한 유저 그리고 마지막 스트릿의 그냥유저와 다른 스트릿의 올인유저 4명이 무승부인 경우
+        이처럼 승자가 몇명이 나오든 마지막 스트릿에 승자가 있는 경우와 없는 경우로 나눈다.
+        마지막 스트릿에 승자가 있다면 그의 지분은 전체 팟이기 때문이고, 
+        이전 스트릿 올인 유저의 지분은 절대 전체 팟보다 클 수 없기 때문이다.
+        즉 마지막 스트릿에 승자가 있는지 없는지 먼저 판단하고
+        그 다음        
+        1. 무승부가 있는경우
+        2. 한명만 우승한 경우
+        순서로 팟을 나누고
+        각각의 경우에 팟을 나눈후 나머지가 남는 경우를 고려한다.
+
+        팟 분배후 칩이 남는 경우
+        나머지 칩은 버튼에서 왼쪽으로 가장 가까운 플레이어에게 수여
+        승자가 여러 명이고 승자의 지분이 같지 않은 경우, 팟총액이 홀수 또는 승자수가 홀수라 팟을 나눈 후 나머지가 생길 땐 지분이 높은쪽 팟에 나머지를 더한다.
+        
+        현재 내가 가지고 있는 정보는
+        각 스트릿별로 올인 유저의 포지션이 키, 그 지분을 밸류로 하는 self.main_pot_confirmed 딕셔너리
+        전체 팟 총액이 담긴 변수인 self.main_pot_cumulative
+        쇼다운 후 승자의 포지션이 원소로 담겨 있고, 무승부인 경우 튜플로 묶여 있는 리스트 self.nuts
+        가 있다.
+
+        한가지 더 고려할 점은
+        카드 랭크 순위와 별개로 게임의 랭킹은 카드 랭크가 낮아도 스택이 높은 사람이 더 높은 순위가 된다는 것이다
+
+
         users_ranking 에는 all_in_users_total + actioned_queue 의 유저들의 베스트 핸드를 비교해 
         내림차순으로 정렬한 유저 포지션 리스트가 들어 있다. 무승부인 포지션은 튜플로 묶여 있다.
         넛츠는 self.log_nuts 에 있다. 타이인 경우 동률인 포지션 이름이 모두 들어 있다.
@@ -704,6 +751,16 @@ class Dealer(Base):
         self.attack_flag == True
         self._posting_blind()
 
+        # 시스템 로그. 유저 액션 기록
+        self.log_hand_actions['pre_flop'].append(("SB", {"bet" : self.SB}))
+        self.log_hand_actions['pre_flop'].append(("BB", {"bet" : self.BB}))
+        self.players['SB']["actions"]['pre_flop']["betting_size_total"]['bet'].append(self.SB)
+        self.players['SB']["actions"]['pre_flop']['pot_contribution']['bet'].append(self.SB) 
+        self.players['SB']["actions"]['pre_flop']["action_list"].append('bet')
+        self.players['BB']["actions"]['pre_flop']["betting_size_total"]['bet'].append(self.BB)
+        self.players['BB']["actions"]['pre_flop']['pot_contribution']['bet'].append(self.BB) 
+        self.players['BB']["actions"]['pre_flop']["action_list"].append('bet')    
+
         '''
         서버 요청 사항
         1. 현재 접속 중인 클라이언트의 유저 아이디 리스트 요청. on_user_list 변수에 할당
@@ -808,7 +865,7 @@ class Dealer(Base):
             # answer = 서버로부터 전달받은 유저의 액션 내용이 담긴 딕셔너리 
 
             # 테스트 코드
-            answer = self.test_code_action_info(current_player, possible_actions)
+            answer = self.test_code_action_info(current_player, possible_actions, street_name)
 
             # 클라이언트에게 전달 받은 응답이 call 이면
             if next(iter(answer)) == "call":
@@ -832,7 +889,7 @@ class Dealer(Base):
                  
             # 클라이언트로부터 전달 받은 응답이 answer = {"all-in" : all_in_amount} 이면
             elif next(iter(answer)) == "all-in":
-                self._all_in(street_name, current_player, answer)
+                self._all_in(street_name, current_player)
 
             '''
             서버 요청 사항
@@ -846,7 +903,14 @@ class Dealer(Base):
                 self.action_queue.append(self.start_order.popleft())
             
             # 시스템 로그. 유저 액션 기록
-            self.log_hand_actions[street_name].append((current_player, answer)) 
+            if next(iter(answer)) == 'all-in':
+                answer = {'all-in' : self.players[current_player]['actions'][street_name]['betting_size_total']['all-in'][-1]}
+                self.log_hand_actions[street_name].append((current_player, answer)) 
+            elif next(iter(answer)) == 'call':
+                answer = {'call' : self.players[current_player]['actions'][street_name]['betting_size_total']['call'][-1]}
+                self.log_hand_actions[street_name].append((current_player, answer))
+            else:
+                self.log_hand_actions[street_name].append((current_player, answer)) 
 
     def _finishing_street(self, street_name):
 
@@ -882,7 +946,7 @@ class Dealer(Base):
     ####################################################################################################################################################
     ####################################################################################################################################################
 
-    def _preFlop(self):
+    def _preFlop(self, stk_size):
         
         street_name = "pre_flop"
         self._prep_preFlop()
@@ -894,11 +958,11 @@ class Dealer(Base):
             # self._pot_award(users_ranking)
 
             # 테스트 코드
-            self.test_code_showdown_pot_award_info
+            self.test_code_showdown_pot_award_info(stk_size)
         else:
-            self._flop()
+            self._flop(stk_size)
     
-    def _flop(self):
+    def _flop(self, stk_size):
     
         street_name = "flop"
         self._prep_street(street_name)
@@ -910,11 +974,11 @@ class Dealer(Base):
             # self._pot_award(users_ranking)
 
             # 테스트 코드
-            self.test_code_showdown_pot_award_info
+            self.test_code_showdown_pot_award_info(stk_size)
         else:
-            self._turn()
+            self._turn(stk_size)
     
-    def _turn(self):
+    def _turn(self, stk_size):
 
         street_name = "turn"
         self._prep_street(street_name)
@@ -926,11 +990,11 @@ class Dealer(Base):
             # self._pot_award(users_ranking)
 
             # 테스트 코드
-            self.test_code_showdown_pot_award_info
+            self.test_code_showdown_pot_award_info(stk_size)
         else:
-            self._river()
+            self._river(stk_size)
     
-    def _river(self):
+    def _river(self, stk_size):
 
         street_name = "river"
         self._prep_street(street_name)
@@ -942,7 +1006,7 @@ class Dealer(Base):
             # self._pot_award(users_ranking)
 
             # 테스트 코드
-            self.test_code_showdown_pot_award_info
+            self.test_code_showdown_pot_award_info(stk_size)
         else:
             print("!!!!!!!!!!!!!!종료조건에 걸리지 않는 상황입니다. 유저들의 액션을 검토해서 종료조건을 수정하거나 추가하세요!!!!!!!!!!!!!!")    
 
@@ -952,8 +1016,8 @@ class Dealer(Base):
     ####################################################################################################################################################
     ####################################################################################################################################################
 
-    def go_street(self):
-        self._preFlop()     
+    def go_street(self, stk_size):
+        self._preFlop(stk_size)     
 
     ####################################################################################################################################################
     ####################################################################################################################################################
@@ -980,44 +1044,46 @@ class Dealer(Base):
 
         return {key: value}
     
-    def test_code_action_info(self, current_player, possible_actions):
+    def test_code_action_info(self, current_player, possible_actions, street_name):
+        print(f'{street_name} 스트리트 입니다')
         stack_size = self.players[current_player]['stk_size']
         print(f'LPFB : {self.LPFB}')
         print(f'prev_VALID : {self.prev_VALID}')
         print(f'prev_TOTAL : {self.prev_TOTAL}')
         print(f'{current_player} 님의 현재 스택사이즈는 {stack_size}입니다')
         print(f'{current_player} 님의 가능한 액션은 {possible_actions} 입니다') 
-        answer = self.get_input(f'{current_player} 님 액션을 입력해 주세요. ')    
+        answer = self.get_input(f'{current_player} 님 액션을 입력해 주세요')    
         print(f'{current_player}님의 액션은 {next(iter(answer))} 입니다')
         print()
         return answer
 
     def test_code_street_info(self, street_name):
         print()
-        print(f'{street_name} 스트리트')
+        print(f'==============={street_name} 스트리트===============')
         print(f'actioned_queue: {self.actioned_queue}')
         print(f'fold_users: {self.fold_users}')
         print(f'all_in_users: {self.all_in_users}')
         print(f'all_in_users_total: {self.all_in_users_total}')
         print()
-        print(f'user actions and bettig size according to start order : {self.log_hand_actions}')
+        print(f'일어난 모든 액션들의 내용을 일어난 순서대로 기록: {self.log_hand_actions}')
         print(f'main_pot_cumulative : {self.main_pot_cumulative}')
         print(f'main_pot_confirmed : {self.main_pot_confirmed}')
         print(f'생존자 : {self.survivors}')
         print()
 
-    def test_code_showdown_pot_award_info(self):
+    def test_code_showdown_pot_award_info(self, stk_size):
+        print("================쇼다운 및 팟 분배 결과================")
         print(f'best hands : {self.log_best_hands}')
         print(f'users_ranking : {self.log_users_ranking}')
         print(f'nuts : {self.log_nuts}')
         print()
-        print(f'main_pot : {self.main_pot_cumulative}')
+        print(f'올인 유저들의 지분 : {self.main_pot_confirmed}')
         print()
-        for position in self.players:
+        for id, position in zip(stk_size, self.players):
             stack_size = self.players[position]['stk_size']
-            print(f'{position} 의 남은 stk_size : {stack_size}')
+            print(f'{position} 의 stk_size 변화 : {stk_size[id]} -> {stack_size}')
 
-  
+
 
 
 

@@ -23,8 +23,13 @@ for test_file in test_files:
     # test_manually.py 스크립트를 실행합니다.
     with open(script_path) as f:
         exec(f.read())
-
+    print()
+    print('---------------------------------------------------------')
+    print()
     print(f"Test case {test_file} executed.")
+    print()
+    print('----------------------------------------------------------')
+    print()
 
 # 모든 테스트가 끝난 후 stdin을 원래대로 복원합니다.
 sys.stdin = original_stdin

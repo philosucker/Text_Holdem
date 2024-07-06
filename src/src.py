@@ -6,24 +6,22 @@ class Base:
     
     def __init__(self, user_id_list, stk_size, rings, stakes):
 
-        self.positions_6 = ["UTG", "HJ", "CO", "D", "SB", "BB"]
-        self.positions_9 = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
-
-        # self.user_id_list = user_id_list
-        # self.stk_size = stk_size
+        self.user_id_list = user_id_list
+        self.stk_size = stk_size
         self.rings = rings
         self.stakes = stakes
   
         self.SB, self.BB = self._blind_post()
 
-        self.log_hand_actions = {"pre_flop" : [], "flop" : [], "turn" : [], "river" : []}
-        
+        self.log_hand_actions = {"pre_flop" : [], "flop" : [], "turn" : [], "river" : []}        
         self.log_hand_cards = {"burned" : [], "flop" : [], "turn" : [], "river" : [], "table_cards" : []} 
         
         self.log_best_hands = OrderedDict() # 쇼다운하여 모든 live_hands 의 best_hands의 랭크 이름과 해당 카드 조합 및 키커를 포지션별로 모은 딕셔너리
         self.log_nuts = {} # best_hands 중 가장 강력한 핸드를 담은 딕셔너리
         self.log_users_ranking = None # 유저 랭킹 리스트
-        self.tie_flag = False  # 무승부 플래그 초기화
+
+        self.positions_6 = ["UTG", "HJ", "CO", "D", "SB", "BB"]
+        self.positions_9 = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
 
         # user_id to position 딕셔너리 생성
         self.user2pos = self._assign_user2pos(user_id_list)
@@ -91,7 +89,8 @@ class Base:
         return players, shuffled_deck
 
     def _initialize_players(self, user_id_list, stk_size, shuffled_deck):
-        positions = self._shuffle_positions(self._get_positions(self.rings)) 
+        positions = self._get_positions(self.rings) # 테스트 코드
+        # positions = self._shuffle_positions(self._get_positions(self.rings)) # 실제코드
         players = {position: {
             "user_id": user_id,
             "stk_size": stk_size[user_id],
@@ -107,9 +106,11 @@ class Base:
         players, stub = self._dealing_cards(players, shuffled_deck)
         return players, stub
 
-##########################################################################
-#                          AUXILIARY SHOWDOWN
-##########################################################################       
+    ####################################################################################################################################################
+    ####################################################################################################################################################
+    #                                                            AUXILIARY SHOWDOWN                                                                    #
+    ####################################################################################################################################################
+    ####################################################################################################################################################
     def _card_rank(self, card):
             return self.card_rank_order.index(card[0])
 
