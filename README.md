@@ -99,51 +99,41 @@ I made reference for you : [Implementation Rules/rule.md](https://github.com/phi
 
     app
      ├──core  
-     │     ├── dealer.py 
-     │     │      └──
+     │     ├──dealer.py (Implementing)
+     │     │      
+     │     │     
+     │     ├──manager.py (Implementation required)
      │     │     
      │     │      
-     │     ├── manager.py
-     │     │      └── 
-     │     │      
-     │     └── floor.py
-     │            └── 
+     │     └──floor.py (Implementation required)  
+     │          
      │            
-     │            
-     │
      ├──client
-     │     ├──Unity   
-     │     │      └──
-     │     │      └──
-     │     │      └──
-     │     ├── 
-     │     │      └── 
-     │     │      └── 
-     │     │      └── 
-     │     └── 
-     │            └── 
-     │            └── 
-     │            └── 
+     │     └──Unity (Implementing)
+     │          
+     │      
+     │        
      │ 
-     └──server  
-          ├── main.py
-          ├── mongod.conf
-          ├── .env
+     └──server (Implementing) 
           │
-          ├── auth
+          ├──main.py
+          ├──mongod.conf
+          ├──.env
+          │
+          ├──auth
           │      └── authenticate.py
           │      └── hash_password.py
           │      └── jwt_handler.py
-          ├── database
+          ├──database
           │      └── connection.py
           │      └── crud.py
-          ├── models
+          ├──models
           │      ├── events.py
           │      └── users.py
-          ├── routes
+          ├──routes
           │      ├── events.py
           │      └── users.py
-          └── tests
+          └──tests
                  ├── test_app1.py
                  └── test_app2.py
   
