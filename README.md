@@ -63,37 +63,40 @@ I made reference for you : [Implementation Rules/rule.md](https://github.com/phi
 - Started learning Unity.  
   
 06.19.2024  
-- Architecture design completed  
-![홀덤-2](https://github.com/philosucker/Text_Holdem/assets/65852355/9219939e-fff9-4f3f-885f-d25b718339c0)
+- Architecture design completed
+  Currently being developed based on Monolithic Architecture.  
+  Planned to upgrade to microservice architecture after development of Core Logic.
+<img src="https://github.com/philosucker/Text_Holdem/assets/65852355/9219939e-fff9-4f3f-885f-d25b718339c0" alt="홀덤-2" width="300" />
+
   
 06.24.2024
-- Began development of backend core logic dealer algorithm
+- Began development of backend core logic dealer algorithm.
 
 06.25.2024
-- Completed implementation of “bet”, “raise”, “all-in”, “call”, “check”, and “fold action” algorithms
+- Completed implementation of “bet”, “raise”, “all-in”, “call”, “check”, and “fold action” algorithms.
 
 06.26.2024
-- Review “end condition” logic
+- Review “end condition” logic.
 
 06.27.2024
-- Review “pot creation and management” logic
+- Review “pot creation and management” logic.
 
 06.28.2024
-- Review “end condition” and “showdown” connection logic
+- Review “end condition” and “showdown” connection logic.
 
 07.01.2024
-- Review of “showdown” and “pot award” connection logic
+- Review of “showdown” and “pot award” connection logic.
 
 07.02.2024
-- Completed implementation of “Showdown” ranking comparison algorithm
+- Completed implementation of “Showdown” ranking comparison algorithm.
 
 07.05.2024
-- Completed implementation of “end condition” algorithm
-- Completed implementation of “pot creation and management” algorithm
-- Implement test case DB and test functions and start dealer logic testing
+- Completed implementation of “end condition” algorithm.
+- Completed implementation of “pot creation and management” algorithm.
+- Implement test case DB and test functions and start dealer logic testing.
 
 07.06.2024
-- Completed implementation of “pot award” algorithm
+- Completed implementation of “pot award” algorithm.
 
 ## Directory Structure  
 
