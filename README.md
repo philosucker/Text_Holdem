@@ -102,13 +102,16 @@ I made reference for you : [Implementation Rules/rule.md](https://github.com/phi
 
     app
      ├──core  
-     │     ├──dealer.py (Implementing)
-     │     │      
+     │     ├──dealer (Implementing)
+     │     │     ├──dealer.py 
+     │     │     ├──src.py 
      │     │     
-     │     ├──manager.py (Implementation required)
+     │     │     
+     │     │     
+     │     ├──manager (Implementation required)
      │     │     
      │     │      
-     │     └──floor.py (Implementation required)  
+     │     └──floor (Implementation required)  
      │          
      │            
      ├──client
