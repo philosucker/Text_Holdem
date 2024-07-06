@@ -66,7 +66,7 @@ I made reference for you : [Implementation Rules/rule.md](https://github.com/phi
 - Architecture design completed
   Currently being developed based on Monolithic Architecture.  
   Planned to upgrade to microservice architecture after development of Core Logic.
-<img src="https://github.com/philosucker/Text_Holdem/assets/65852355/9219939e-fff9-4f3f-885f-d25b718339c0" alt="홀덤-2" width="300" />
+<img src="https://github.com/philosucker/Text_Holdem/assets/65852355/9219939e-fff9-4f3f-885f-d25b718339c0" alt="홀덤-2" width="500" />
 
   
 06.24.2024
