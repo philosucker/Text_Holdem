@@ -17,8 +17,10 @@ class Base:
         self.log_hand_cards = {"burned" : [], "flop" : [], "turn" : [], "river" : [], "table_cards" : []} 
         
         self.log_best_hands = OrderedDict() # 쇼다운하여 모든 live_hands 의 best_hands의 랭크 이름과 해당 카드 조합 및 키커를 포지션별로 모은 딕셔너리
+        self.log_live_hands = None # live_hands의 포지션 명을 담은 리스트
         self.log_nuts = {} # best_hands 중 가장 강력한 핸드를 담은 딕셔너리
         self.log_users_ranking = None # 유저 랭킹 리스트
+        
 
         self.positions_6 = ["UTG", "HJ", "CO", "D", "SB", "BB"]
         self.positions_9 = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
@@ -97,8 +99,9 @@ class Base:
             "starting_cards": [],
             "actions": {
                 street: {"action_list": [], 
-                         "pot_contribution": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]},
-                         "betting_size_total": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]} }
+                        "pot_contribution": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]},
+                        "betting_size_total": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]},
+                        }
                 for street in ["pre_flop", "flop", "turn", "river"]
             }
         } for position, user_id in zip(positions, user_id_list)}
@@ -272,11 +275,14 @@ class Base:
         '''
         쇼다운 결과 커뮤니티 카드 5장과 유저의 스타팅 카드 2장으로 만들수 있는
         베스트 핸드들의 딕셔너리 self.log_best_hands를 받아서
-        핸드 랭크 이름으로 먼저 비교하고, 이름이 같으면 핸드를 이루는 카드 조합의 카드 랭크를 앞에서부터 순서대로 비교하고, 카드 랭크도 같으면 키커가 있는 경우 키커까지 비교해서
+        핸드 랭크 이름으로 먼저 비교하고, 
+        이름이 같으면 핸드를 이루는 카드 조합의 카드 랭크를 앞에서부터 순서대로 비교하고, 
+        카드 랭크도 같으면 키커가 있는 경우 키커까지 비교해서
         핸드의 파워가 강력한 순서로 해당 핸드를 가진 유저의 포지션을 내림차순 정렬하고,
         키커까지 모두 똑같아서 무승부인 유저들은 튜플로 묶은 리스트를 반환하는 함수
         '''
         positions = list(self.log_best_hands.keys())
+        self.live_hands = positions
         users_ranking_list = sorted(positions, key=lambda position: self._hand_key(position), reverse=True)
         
         tied_players = []
@@ -309,4 +315,5 @@ class Base:
 
         self.log_users_ranking = ranked_users
         users_ranking = deque(ranked_users).copy()
+
         return users_ranking
