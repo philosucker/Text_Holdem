@@ -92,11 +92,9 @@ I made reference for you : [Implementation Rules/rule.md](https://github.com/phi
 
 07.05.2024
 - Completed implementation of “end condition” algorithm.
-- Completed implementation of “pot creation and management” algorithm.
 - Implement test case DB and test functions and start dealer logic testing.
 
-07.06.2024
-- Completed implementation of “pot award” algorithm.
+
 
 ## Directory Structure  
 
