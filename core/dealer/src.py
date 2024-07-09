@@ -17,7 +17,6 @@ class Base:
         self.log_hand_cards = {"burned" : [], "flop" : [], "turn" : [], "river" : [], "table_cards" : []} 
         
         self.log_best_hands = OrderedDict() # 쇼다운하여 모든 live_hands 의 best_hands의 랭크 이름과 해당 카드 조합 및 키커를 포지션별로 모은 딕셔너리
-        self.log_live_hands = None # live_hands의 포지션 명을 담은 리스트
         self.log_nuts = {} # best_hands 중 가장 강력한 핸드를 담은 딕셔너리
         self.log_users_ranking = None # 유저 랭킹 리스트
         
@@ -282,7 +281,6 @@ class Base:
         키커까지 모두 똑같아서 무승부인 유저들은 튜플로 묶은 리스트를 반환하는 함수
         '''
         positions = list(self.log_best_hands.keys())
-        self.live_hands = positions
         users_ranking_list = sorted(positions, key=lambda position: self._hand_key(position), reverse=True)
         
         tied_players = []
