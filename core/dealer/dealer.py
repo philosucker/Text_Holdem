@@ -349,13 +349,77 @@ class Dealer(Base):
 
         return nuts
 
-    def _pot_award(self, nuts, street_name : str) -> None:
+    # def _pot_award(self, nuts : dict, street_name : str) -> None:
 
+    #     def _start_order(street_name):
+    #         if street_name == 'pre_flop':
+    #             if self.rings == 6:
+    #                 start_order =["UTG", "HJ", "CO", "D", "SB", "BB"]             
+    #             elif self.rings == 9:
+    #                 start_order = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
+    #         else:
+    #             if self.rings == 6:
+    #                 start_order = ["SB", "BB", "UTG", "HJ", "CO", "D"]            
+    #             elif self.rings == 9:
+    #                 start_order = ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D']     
+
+    #         return start_order
+        
+    #     winner_list = [winner for winner in nuts.keys()]
+    #     street_list = ["pre_flop", "flop", "turn", "river"]
+    #     for street in street_list:
+    #         pots = self.side_pots[street].get('pots', {})
+    #         for _ , pot in pots.items():
+    #             pot_size = pot['size']
+    #             contributors = pot['contributors']
+
+    #             if len(winner_list) == 1:
+    #                 winner = winner_list[0]
+    #                 if winner in contributors:
+    #                     self.players[winner]['stk_size'] += pot_size
+    #                     self.pot_total -= pot_size
+    #                 else:
+    #                     share = pot_size // len(contributors)
+    #                     for user in contributors:
+    #                         self.players[user]['stk_size'] += share
+    #                         self.pot_total -= share
+    #             else:  
+    #                 if any(winner in contributors for winner in winner_list):
+    #                     winner_list = self._find_intersection(winner_list, contributors)
+    #                     quotient, remainder = divmod(pot_size, len(winner_list))
+    #                     for winner in winner_list:
+    #                         self.players[winner]['stk_size'] += quotient
+    #                         self.pot_total -= quotient
+    #                     if remainder:
+    #                         for user in _start_order(street_name):
+    #                             if user in winner_list:
+    #                                 self.players[user]['stk_size'] += remainder
+    #                                 self.pot_total -= remainder
+    #                                 break
+    #                 else:
+    #                     share = pot_size // len(contributors)
+    #                     for user in contributors:
+    #                         self.players[user]['stk_size'] += share
+    #                         self.pot_total -= share
+
+    #     if not self.pot_total == 0:
+    #         print(self.pot_total)
+    #     assert self.pot_total == 0
+
+    def _pot_award(self, nuts : dict, street_name : str) -> None:
+        '''
+        스트릿 별로 순회하면서 해당 스트릿에 승자가 있으면
+            스트릿 총팟에서 유저의 팟 기여도의 비율로 승자에게 팟을 배분하고
+            (단독승이면 stake for all 100% 무승부면 무승부인 사람의 stake for all을 합친 금액을 팟 기여도 비율만큼 나눈다)
+            배분후 팟이 남아서 패자들에게 돌려줄 때는 
+            카드랭크 순위대로 돌려주되 팟기여도만큼 돌려주되, 
+                패자끼리 무승부일 때는 남은 팟에 대해 기여도 비율만큼 돌려준다.
+        '''               
         def _start_order(street_name):
             if street_name == 'pre_flop':
                 if self.rings == 6:
                     start_order =["UTG", "HJ", "CO", "D", "SB", "BB"]             
-                elif self.rings == 6:
+                elif self.rings == 9:
                     start_order = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
             else:
                 if self.rings == 6:
@@ -365,46 +429,166 @@ class Dealer(Base):
 
             return start_order
         
+        users_ranking = self.log_users_ranking.copy()
+        users_ranking.popleft()
         winner_list = [winner for winner in nuts.keys()]
         street_list = ["pre_flop", "flop", "turn", "river"]
         for street in street_list:
-            pots = self.side_pots[street].get('pots', {})
-            for _ , pot in pots.items():
-                pot_size = pot['size']
-                contributors = pot['contributors']
+            if self.side_pots[street].get('contribution_total', {}):
+                pot_size = self.side_pots[street]['contribution_total']
+                contributors = [position for position, contribution in self.side_pots[street]['users_pot_contributions'].items() if contribution >= 0]
 
                 if len(winner_list) == 1:
                     winner = winner_list[0]
+                    
                     if winner in contributors:
-                        self.players[winner]['stk_size'] += pot_size
-                        self.pot_total -= pot_size
+                        self.players[winner]['stk_size'] += self.side_pots[street]['stake_for_all'][winner]
+                        self.pot_total -= self.side_pots[street]['stake_for_all'][winner]
+                        pot_size -= self.side_pots[street]['stake_for_all'][winner]
+
+                        if pot_size:
+                            while pot_size > 0:
+                                if isinstance(users_ranking[0], tuple):
+                                    contribution_list = []
+                                    for user in users_ranking[0]:
+                                        if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                            contribution = self.side_pots[street]['users_pot_contributions'][user]
+                                            contribution_list.append(contribution)
+                                    total = sum(contribution_list)
+                                    if pot_size < total:
+                                        share_list = []
+                                        for idx, contribution in enumerate(contribution_list):
+                                            share = (contribution * pot_size) // total
+                                            share_list.append(share)
+                                            self.players[users_ranking[0][idx]]['stk_size'] += share
+                                            self.pot_total -= share
+                                            pot_size -= share
+                                        remainder = pot_size - sum(share_list)
+                                        if remainder:
+                                            for user in _start_order(street_name):
+                                                if user in users_ranking[0]:
+                                                    self.players[user]['stk_size'] += remainder
+                                                    self.pot_total -= remainder
+                                                    pot_size -= remainder
+                                                    break
+                                        users_ranking.popleft()
+                                    else:
+                                        for user in users_ranking[0]:
+                                            if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                                self.players[user]['stk_size'] += self.side_pots[street]['users_pot_contributions'][user]
+                                                self.pot_total -= self.side_pots[street]['users_pot_contributions'][user]
+                                                pot_size -= self.side_pots[street]['users_pot_contributions'][user]
+                                        users_ranking.popleft()
+                                else:
+                                    if self.side_pots[street]['users_pot_contributions'].get(users_ranking[0], {}):
+                                        if pot_size > self.side_pots[street]['users_pot_contributions'][users_ranking[0]]:
+                                            self.players[users_ranking[0]]['stk_size'] += self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                            self.pot_total -= self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                            pot_size -= self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                            users_ranking.popleft()
+                                        else:
+                                            self.players[users_ranking[0]]['stk_size'] += pot_size
+                                            self.pot_total -= pot_size
+                                            pot_size = 0
+                                            users_ranking.popleft()
+                            assert pot_size == 0
                     else:
-                        share = pot_size // len(contributors)
                         for user in contributors:
-                            self.players[user]['stk_size'] += share
-                            self.pot_total -= share
+                            self.players[user]['stk_size'] += self.side_pots[street]['users_pot_contributions'][user]
+                            self.pot_total -= self.side_pots[street]['users_pot_contributions'][user]
+                            pot_size -= self.side_pots[street]['users_pot_contributions'][user]
+                        assert pot_size == 0
+
                 else:  
                     if any(winner in contributors for winner in winner_list):
                         winner_list = self._find_intersection(winner_list, contributors)
-                        quotient, remainder = divmod(pot_size, len(winner_list))
+                        stake_total = 0
                         for winner in winner_list:
-                            self.players[winner]['stk_size'] += quotient
-                            self.pot_total -= quotient
-                        if remainder:
-                            for user in _start_order(street_name):
-                                if user in winner_list:
-                                    self.players[user]['stk_size'] += remainder
-                                    self.pot_total -= remainder
-                                    break
-                    else:
-                        share = pot_size // len(contributors)
-                        for user in contributors:
-                            self.players[user]['stk_size'] += share
-                            self.pot_total -= share
+                            stake_total += self.side_pots[street]['stake_for_all'][winner]
+                        if stake_total > pot_size:
+                            contribution_list = []
+                            for winner in winner_list:
+                                contribution = self.side_pots[street]['users_pot_contributions'][winner]
+                                contribution_list.append(contribution)
+                            total = sum(contribution_list)
+                            share_list = []
+                            for idx, contribution in enumerate(contribution_list):
+                                share = (contribution * pot_size) // total
+                                share_list.append(share)
+                                self.players[winner_list[idx]]['stk_size'] += share
+                                self.pot_total -= share
+                                pot_size -= share                           
+                            remainder = pot_size - sum(share_list)
+                            if remainder:
+                                for user in _start_order(street_name):
+                                    if user in winner_list:
+                                        self.players[user]['stk_size'] += remainder
+                                        self.pot_total -= remainder
+                                        pot_size -= remainder
+                                        break
+                            print(pot_size)
+                            assert pot_size == 0
+                        else:
+                            for winner in winner_list:
+                                self.players[winner]['stk_size'] += self.side_pots[street]['stake_for_all'][winner]
+                                self.pot_total -= self.side_pots[street]['stake_for_all'][winner]
+                                pot_size -= self.side_pots[street]['stake_for_all'][winner]
 
-        if not self.pot_total == 0:
-            print(self.pot_total)
-        assert self.pot_total == 0
+                            if pot_size:
+                                while pot_size > 0:
+                                    if isinstance(users_ranking[0], tuple):
+                                        contribution_list = []
+                                        for user in users_ranking[0]:
+                                            if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                                contribution = self.side_pots[street]['users_pot_contributions'][user]
+                                                contribution_list.append(contribution)
+                                        total = sum(contribution_list)
+                                        if pot_size < total:
+                                            share_list = []
+                                            for idx, contribution in enumerate(contribution_list):
+                                                share = (contribution * pot_size) // total
+                                                self.players[users_ranking[0][idx]]['stk_size'] += share
+                                                self.pot_total -= share
+                                                pot_size -= share
+                                            remainder = pot_size - sum(share_list)
+                                            if remainder:
+                                                for user in _start_order(street_name):
+                                                    if user in users_ranking[0]:
+                                                        self.players[user]['stk_size'] += remainder
+                                                        self.pot_total -= remainder
+                                                        pot_size -= remainder
+                                                        break
+                                            users_ranking.popleft()
+                                        else:
+                                            for user in users_ranking[0]:
+                                                if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                                    self.players[user]['stk_size'] += self.side_pots[street]['users_pot_contributions'][user]
+                                                    self.pot_total -= self.side_pots[street]['users_pot_contributions'][user]
+                                                    pot_size -= self.side_pots[street]['users_pot_contributions'][user]
+                                            users_ranking.popleft()
+                                    else:
+                                        if self.side_pots[street]['users_pot_contributions'].get(users_ranking[0], {}):
+                                            if pot_size > self.side_pots[street]['users_pot_contributions'][users_ranking[0]]:
+                                                self.players[users_ranking[0]]['stk_size'] += self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                                self.pot_total -= self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                                pot_size -= self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                                users_ranking.popleft()
+                                            else:
+                                                self.players[users_ranking[0]]['stk_size'] += pot_size
+                                                self.pot_total -= pot_size
+                                                pot_size = 0
+                                                users_ranking.popleft()
+                                assert pot_size == 0
+                    else:
+                        if self.side_pots[street]['users_pot_contributions'].get(users_ranking[0], {}):
+                            for user in contributors:
+                                self.players[user]['stk_size'] += self.side_pots[street]['users_pot_contributions'][user]
+                                self.pot_total -= self.side_pots[street]['users_pot_contributions'][user]
+                                pot_size -= self.side_pots[street]['users_pot_contributions'][user]
+                            assert pot_size == 0
+            if not self.pot_total == 0:
+                print(self.pot_total)
+            assert self.pot_total == 0
 
     ####################################################################################################################################################
     ####################################################################################################################################################

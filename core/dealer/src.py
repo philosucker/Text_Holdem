@@ -707,7 +707,7 @@ class Base:
     ####################################################################################################################################################
     ####################################################################################################################################################
 
-    def _find_optimal_combination(self, winner_list: list, contributors: list) -> list:
+    def _find_intersection(self, winner_list: list, contributors: list) -> list:
         '''
         종류 : 리턴값이 있는 함수
         기능 : 무승부가 발생한 경우, 팟이 생성된 스트리트에 한해서, 무승부인 유저들의 리스트와 해당 스트리트의 팟 생성에 기여한 유저 리스트의 교집합을 반환
@@ -722,7 +722,7 @@ class Base:
         
         return list(intersection)
                         
-    def _individual_pot_contribution(self, path : dict.keys):
+    def _individual_pot_contribution(self, path : dict.keys) -> int:
         '''
         종류 : 리턴값이 있는 함수
         기능 : 개별 팟 기여도를 반환하는 side_pots 함수의 보조함수
@@ -735,7 +735,7 @@ class Base:
 
         return total_sum
 
-    def _sum_individual_pot_contrbutions(self, street_name : str, user_list : str):
+    def _sum_individual_pot_contrbutions(self, street_name : str, user_list : str) -> int:
         '''
         종류 : 리턴값이 있는 함수
         기능 : 유저들의 팟 기여도 총합을 반환하는 side_pots 함수의 보조함수
@@ -749,7 +749,7 @@ class Base:
         
         return users_stake
             
-    def _side_pots(self, street_name : str, ratio = False) -> dict:
+    def _side_pots(self, street_name : str) -> dict:
         '''
         종류 : 리턴값이 있는 함수
         기능 : 매 스트릿 종료시 메인팟과 사이드 팟들을 계산해서 반환
@@ -765,23 +765,22 @@ class Base:
         all_user : list = list(self.actioned_queue) + self.all_in_users + self.fold_users
         users_pot_contribution = {position: self._individual_pot_contribution(self.players[position]["actions"][street_name]["pot_contribution"]) 
                                   for position in all_user}
-        self.side_pots[street_name]['users_pot_contributions'] = users_pot_contribution
+        self.side_pots[street_name]['users_pot_contributions'] = users_pot_contribution.copy()
 
         contribution_total = self._sum_individual_pot_contrbutions(street_name, all_user)
         self.side_pots[street_name]['contribution_total'] = contribution_total
 
         self.side_pots[street_name]['pot_total'] = self.pot_total
 
-        if ratio == True:
-            for position in all_user:
-                self.side_pots[street_name][position] = 0
-                user_stake = 0
-                user_contribution = users_pot_contribution[position]
-                
-                for _ , other_contribution in users_pot_contribution.items():
-                    user_stake += min(other_contribution, user_contribution)
-                
-                self.side_pots[street_name]['stake_for_all'][position] = user_stake
+        self.side_pots[street_name]['stake_for_all'] = {}
+        for position in all_user:
+            user_stake = 0
+            user_contribution = users_pot_contribution[position]
+            
+            for _ , other_contribution in users_pot_contribution.items():
+                user_stake += min(other_contribution, user_contribution)
+            
+            self.side_pots[street_name]['stake_for_all'][position] = user_stake
 
         contributors_ascending_order = deque(sorted(
             [position for position, contribution in users_pot_contribution.items() if contribution > 0],
