@@ -1,5 +1,4 @@
 
-from collections import deque, OrderedDict, defaultdict
 import configparser
 import sys
 import os
@@ -13,7 +12,7 @@ from test_helper import *
 
 class Dealer(Base):
 
-    def __init__(self, user_id_list, stk_size, rings, stakes):
+    def __init__(self, user_id_list : list, stk_size : list, rings : int, stakes : str) -> None:
         super().__init__(user_id_list, stk_size, rings, stakes)
 
         self.config = configparser.ConfigParser()
@@ -31,7 +30,7 @@ class Dealer(Base):
     ####################################################################################################################################################
     ####################################################################################################################################################
     
-    def _prep_preFlop(self, street_name):
+    def _prep_preFlop(self, street_name : str) -> None:
         
         self._initialize_start_order(street_name)
         # SB와 BB의 블라인드 포스팅은 bet으로 간주
@@ -76,7 +75,7 @@ class Dealer(Base):
         if self.start_order:
             self.action_queue.append(self.start_order.popleft())
 
-    def _prep_street(self, street_name):
+    def _prep_street(self, street_name : str ) -> None:
         
         # 이전 스트릿에서 넘어온 유저만을 대상으로 start_order 재정렬
         self._initialize_start_order(street_name)
@@ -119,7 +118,7 @@ class Dealer(Base):
         if self.start_order:
             self.action_queue.append(self.start_order.popleft())
 
-    def _play_street(self, street_name):
+    def _play_street(self, street_name : str ) -> None:
 
         while self.action_queue:
 
@@ -201,7 +200,7 @@ class Dealer(Base):
             else:
                 self.log_hand_actions[street_name].append((current_player, answer)) 
 
-    def _finishing_street(self, street_name):
+    def _finishing_street(self, street_name : str ) -> None:
 
         # 사이드팟 생성
         pots = self._side_pots(street_name)
@@ -226,7 +225,7 @@ class Dealer(Base):
     ####################################################################################################################################################
     ####################################################################################################################################################
        
-    def _end_conditions(self, street_name):
+    def _end_conditions(self, street_name : str ) -> bool:
         
         if len(self.fold_users_total) == self.rings:
             print("every user fold")
@@ -350,7 +349,7 @@ class Dealer(Base):
 
         return nuts
 
-    def _pot_award(self, nuts, street_name) -> None:
+    def _pot_award(self, nuts, street_name : str) -> None:
 
         def _start_order(street_name):
             if street_name == 'pre_flop':
@@ -386,7 +385,7 @@ class Dealer(Base):
                             self.pot_total -= share
                 else:  
                     if any(winner in contributors for winner in winner_list):
-                        winner_list = self._find_optimal_combination(winner_list, contributors)
+                        winner_list = self._find_intersection(winner_list, contributors)
                         quotient, remainder = divmod(pot_size, len(winner_list))
                         for winner in winner_list:
                             self.players[winner]['stk_size'] += quotient
@@ -413,7 +412,7 @@ class Dealer(Base):
     ####################################################################################################################################################
     ####################################################################################################################################################
 
-    def _preFlop(self, stk_size):
+    def _preFlop(self, stk_size : list) -> None:
         
         street_name = "pre_flop"
         self._prep_preFlop(street_name)
@@ -432,7 +431,7 @@ class Dealer(Base):
         else:
             self._flop(stk_size)
     
-    def _flop(self, stk_size):
+    def _flop(self, stk_size : list) -> None:
     
         street_name = "flop"
         self._prep_street(street_name)
@@ -451,7 +450,7 @@ class Dealer(Base):
         else:
             self._turn(stk_size)
     
-    def _turn(self, stk_size):
+    def _turn(self, stk_size : list) -> None:
 
         street_name = "turn"
         self._prep_street(street_name)
@@ -470,7 +469,7 @@ class Dealer(Base):
         else:
             self._river(stk_size)
     
-    def _river(self, stk_size):
+    def _river(self, stk_size : list) -> None:
 
         street_name = "river"
         self._prep_street(street_name)
@@ -495,5 +494,5 @@ class Dealer(Base):
     ####################################################################################################################################################
     ####################################################################################################################################################
 
-    def go_street(self, stk_size):
+    def go_street(self, stk_size : list) -> None:
         self._preFlop(stk_size)     

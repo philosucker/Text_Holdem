@@ -4,7 +4,7 @@ from collections import OrderedDict, defaultdict, Counter, deque
 
 class Base:
     
-    def __init__(self, user_id_list, stk_size, rings, stakes):
+    def __init__(self, user_id_list : list, stk_size : list, rings : int, stakes : str) -> None:
 
         # from floor
         self.user_id_list = user_id_list
@@ -14,7 +14,7 @@ class Base:
 
         # initialize self.players
         self.shuffled_deck = self._shuffle_deck()
-        self.players, self.stub = self._initialize_players(user_id_list, stk_size, self.shuffled_deck)
+        self.players, self.stub, self.user2pos = self._initialize_players(user_id_list, stk_size, self.shuffled_deck)
         
         # initialize street
         self.start_order : deque = None
@@ -59,7 +59,8 @@ class Base:
     ####################################################################################################################################################
     #################################################################################################################################################### 
    
-    def _get_positions(self, rings):
+    def _get_positions(self, rings : int) -> list:
+        
         if rings == 6:
             return ["UTG", "HJ", "CO", "D", "SB", "BB"]
         elif rings == 9:
@@ -67,27 +68,32 @@ class Base:
         else:
             raise ValueError("Invalid number of rings. Must be 6 or 9.")
 
-    def _shuffle_positions(self, positions): 
+    def _shuffle_positions(self, positions : list) -> list: 
+        
         shuffled_positions = random.sample(positions, len(positions))
+        
         return shuffled_positions
 
-    def _shuffle_deck(self):
+    def _shuffle_deck(self) -> list:
+
         ranks = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
         suits = ['H', 'D', 'C', 'S']  # H: 하트, D: 다이아몬드, C: 클로버, S: 스페이드
         deck = [rank + suit for suit in suits for rank in ranks]
         shuffled_deck = random.sample(deck, len(deck))
+
         return shuffled_deck
     
-    def _dealing_cards(self, players, shuffled_deck):
+    def _dealing_cards(self, players : dict, shuffled_deck : list) -> tuple[dict, list]:
         for _ in range(2):
             for position in players:
                 players[position]['starting_cards'].append(shuffled_deck.pop(0))
 
         return players, shuffled_deck
 
-    def _initialize_players(self, user_id_list, stk_size, shuffled_deck):
+    def _initialize_players(self, user_id_list : list, stk_size : list, shuffled_deck : list) -> tuple[dict, list, dict]:
         positions = self._get_positions(self.rings) # 테스트 코드
         # positions = self._shuffle_positions(self._get_positions(self.rings)) # 실제코드
+        user2pos = {user_id: position for position, user_id in zip(positions, user_id_list)}
         players = {position: {
             "user_id": user_id,
             "stk_size": stk_size[user_id],
@@ -102,7 +108,8 @@ class Base:
         } for position, user_id in zip(positions, user_id_list)}
         
         players, stub = self._dealing_cards(players, shuffled_deck)
-        return players, stub
+
+        return players, stub, user2pos
 
     ####################################################################################################################################################
     ####################################################################################################################################################
@@ -110,7 +117,7 @@ class Base:
     ####################################################################################################################################################
     ####################################################################################################################################################
     
-    def _possible_actions(self, street_name, current_player):
+    def _possible_actions(self, street_name : str, current_player :str) -> list:
 
         player_stack = self.players[current_player]['stk_size']
 
@@ -149,7 +156,7 @@ class Base:
 
         return possible_actions
        
-    def _bet(self, street_name, current_player, answer):
+    def _bet(self, street_name : str, current_player : str, answer :dict) -> None:
 
         if current_player in self.check_users:
             self.check_users.remove(current_player)
@@ -197,7 +204,7 @@ class Base:
         메인팟 사이즈를 self.bet_amount을 더한 결과로 렌더링
         '''
     
-    def _call(self, street_name, current_player):
+    def _call(self, street_name : str, current_player : str) -> None:
 
         if current_player in self.check_users:
             self.check_users.remove(current_player)
@@ -248,7 +255,7 @@ class Base:
         메인팟 사이즈를 prev_VALID을 더한 결과로 렌더링
         '''
 
-    def _raise(self, street_name, current_player, answer):
+    def _raise(self, street_name : str, current_player : str, answer : dict) -> None:
 
         if current_player in self.check_users:
             self.check_users.remove(current_player)
@@ -306,7 +313,7 @@ class Base:
         메인팟 사이즈를 raised_total을 더한 결과로 렌더링
         '''
     
-    def _all_in(self, street_name, current_player):
+    def _all_in(self, street_name : str, current_player : str) -> None:
 
         if current_player in self.check_users:
             self.check_users.remove(current_player)
@@ -383,7 +390,7 @@ class Base:
         if self.deep_stack_user_counter < 2:
             self.short_stack_end_flag == True
         
-    def _check(self, street_name, current_player):
+    def _check(self, street_name : str, current_player : str) -> None:
         last_action = "check"
         self.players[current_player]["actions"][street_name]["action_list"].append(last_action)
         self.actioned_queue.append(current_player)
@@ -393,7 +400,7 @@ class Base:
         체크한 플레이어가 체크했음을 렌더링       
         '''
     
-    def _fold(self, street_name, current_player):
+    def _fold(self, street_name : str, current_player : str) -> None:
 
         if current_player in self.check_users: # 체크했던 유저가 폴드할 수도 있다.
             self.check_users.remove(current_player)
@@ -409,6 +416,7 @@ class Base:
     ####################################################################################################################################################
     
     def _face_up_community_cards(self, street_name : str) -> list: 
+
         self.log_community_cards['burned'].append(self.stub.pop(0)) # 버닝
         if street_name == 'flop':
             for _ in range(3):
@@ -435,15 +443,17 @@ class Base:
 
         return community_cards
     
-    def _face_up_user_hand(self):
+    def _face_up_user_hand(self) -> dict:
+
         user_hand = dict()
         all_user = [position for position in self.all_in_users_total] + list(self.actioned_queue)
         for position in all_user:
             starting_cards = self.players[position]['starting_cards']
             user_hand[position] = starting_cards
+
         return user_hand
 
-    def _compare_hand(self, user_cards : dict, community_cards : list):
+    def _compare_hand(self, user_cards : dict, community_cards : list) -> dict:
 
         for position in user_cards:
             pocket_cards = user_cards[position]
@@ -482,7 +492,8 @@ class Base:
 
         return nuts
     
-    def _make_best_hands(self, pocket_cards, community_cards):
+    def _make_best_hands(self, pocket_cards : list, community_cards : list) -> dict:
+
         best_rank_name = None
         best_hand = None
         best_rank_value = 0
@@ -515,7 +526,7 @@ class Base:
 
         return {best_rank_name: best_hand, "kicker": best_kicker}
 
-    def _classify_hand(self, cards, pocket_cards):
+    def _classify_hand(self, cards : list, pocket_cards : list) -> tuple[str, list]:
 
         def _flush(cards):
                 suits = [card[1] for card in cards]
@@ -581,10 +592,11 @@ class Base:
 
         return "high_card", cards[:5]
 
-    def _card_rank(self, card):
+    def _card_rank(self, card : str) -> int:
+            
             return self.card_rank_order.index(card[0])
 
-    def _resolve_ties(self, nuts_positions):
+    def _resolve_ties(self, nuts_positions : list) -> list:
         if len(nuts_positions) <= 1:
             return nuts_positions
 
@@ -635,21 +647,24 @@ class Base:
 
     def _users_ranking(self) -> list:
         '''
-        쇼다운 결과 커뮤니티 카드 5장과 유저의 스타팅 카드 2장으로 만들수 있는
-        베스트 핸드들의 딕셔너리 self.log_best_hands를 받아서
-        핸드 랭크 이름으로 먼저 비교하고, 
-        이름이 같으면 핸드를 이루는 카드 조합의 카드 랭크를 앞에서부터 순서대로 비교하고, 
-        카드 랭크도 같으면 키커가 있는 경우 키커까지 비교해서
-        핸드의 파워가 강력한 순서로 해당 핸드를 가진 유저의 포지션을 내림차순 정렬하고,
-        키커까지 모두 똑같아서 무승부인 유저들은 튜플로 묶은 리스트를 반환하는 함수
+        종류 : 리턴값이 있는 함수
+        기능 : live hands의 쇼다운 결과 무승부는 튜플로 묶은 카드 랭크 순위 오름차순 리스트를 반환
+        목적 : 로그 작성용
         '''
         def _hand_key(position):
+            '''
+            종류 : 리턴값이 있는 함수
+            기능 : self.log_best_hands 에서 핸드의 파워가 강력한 순서로 해당 핸드를 가진 유저의 포지션을 내림차순 정렬하기 위해 다음 순서의 비교 기준을 튜플로 반환
+            핸드 랭크 이름으로 먼저 비교 후, 같으면 카드 조합의 카드 랭크를 앞에서부터 순서대로 비교 후, 같으면 키커가 있는 경우 키커도 앞에서부터 순서대로 비교
+            목적 : _users_ranking 함수에서 유저 카드 랭킹 리스트 정렬 기준을 제공하는 보조함수        
+            '''
             hand_name = next(iter(self.log_best_hands[position]))
             hand_combinations = self.log_best_hands[position][hand_name]
             card_ranks = [self._card_rank(card) for card in hand_combinations]
             kicker_ranks = [self._card_rank(card) for card in self.log_best_hands[position].get('kicker', [])]
 
             return (self.hand_power[hand_name], card_ranks, kicker_ranks)
+        
         positions = list(self.log_best_hands.keys())
         users_ranking_list = sorted(positions, key=lambda position: _hand_key(position), reverse=True)
         
@@ -691,23 +706,28 @@ class Base:
     #                                                               AUXILIARY POT AWARD                                                                #
     ####################################################################################################################################################
     ####################################################################################################################################################
-    
-    def _find_optimal_combination(self, winner_list, contributors):
-        max_overlap = 0
-        optimal_combination = []
 
-        for subset_size in range(1, len(winner_list) + 1):  # 부분집합 크기를 1부터 시작
-            for combo in combinations(winner_list, subset_size):
-                overlap = len(set(combo) & set(contributors))
-                if overlap > max_overlap:
-                    max_overlap = overlap
-                    optimal_combination = list(combo)
-                elif overlap == max_overlap and len(combo) < len(optimal_combination):
-                    optimal_combination = list(combo)
-
-        return optimal_combination
-    
-    def _individual_pot_contribution(self, path):
+    def _find_optimal_combination(self, winner_list: list, contributors: list) -> list:
+        '''
+        종류 : 리턴값이 있는 함수
+        기능 : 무승부가 발생한 경우, 팟이 생성된 스트리트에 한해서, 무승부인 유저들의 리스트와 해당 스트리트의 팟 생성에 기여한 유저 리스트의 교집합을 반환
+        목적 : 무승부 유저가 기여한 팟인 경우, 무승부 유저 수에 따라 팟을 등분하여 무승부 유저들에게 분배
+        '''            
+        winner_set = set(winner_list)
+        contributors_set = set(contributors)
+        intersection = winner_set & contributors_set
+        
+        if not intersection:
+            return []
+        
+        return list(intersection)
+                        
+    def _individual_pot_contribution(self, path : dict.keys):
+        '''
+        종류 : 리턴값이 있는 함수
+        기능 : 개별 팟 기여도를 반환하는 side_pots 함수의 보조함수
+        목적 : individual_pot_contribution 를 계산
+        '''
         pot_contribution = path
         total_sum = 0
         for key in pot_contribution:
@@ -715,7 +735,12 @@ class Base:
 
         return total_sum
 
-    def _sum_individual_pot_contrbutions(self, street_name, user_list):
+    def _sum_individual_pot_contrbutions(self, street_name : str, user_list : str):
+        '''
+        종류 : 리턴값이 있는 함수
+        기능 : 유저들의 팟 기여도 총합을 반환하는 side_pots 함수의 보조함수
+        목적 : individual_pot_contribution 을 누적합하여 contribution_total 을 계산
+        '''
         users_stake = 0
         for user in user_list:
             user_path = self.players[user]["actions"][street_name]["pot_contribution"]
@@ -724,23 +749,27 @@ class Base:
         
         return users_stake
             
-    def _side_pots(self, street_name, ratio = False):  # 사이드팟 생성함수
+    def _side_pots(self, street_name : str, ratio = False) -> dict:
+        '''
+        종류 : 리턴값이 있는 함수
+        기능 : 매 스트릿 종료시 메인팟과 사이드 팟들을 계산해서 반환
+        목적 : 팟 분배시 사용
         
-        # 해당 스트릿의 모든 유저
-        all_user : list = list(self.actioned_queue) + self.all_in_users + self.fold_users
+        users_pot_contribution : 해당 스트릿에서의 모든 유저의 팟 기여도
+        contribution_total : users_pot_contribution의 총합
+        contributors_ascending_order : 기여도를 기준으로 오름차순으로 포지션을 정렬한 리스트
+        pots : 각 메인팟, 사이드팟들의 금액과 해당 팟에 기여한 유저 목록을 저장할 딕셔너리
+        pot_number : 사이드 팟 번호를 추적할 변수
+        '''
 
-        # 해당 스트릿에서의 모든 유저의 팟 기여도
-        users_pot_contribution = {
-            position: self._individual_pot_contribution(self.players[position]["actions"][street_name]["pot_contribution"])
-            for position in all_user
-        }
+        all_user : list = list(self.actioned_queue) + self.all_in_users + self.fold_users
+        users_pot_contribution = {position: self._individual_pot_contribution(self.players[position]["actions"][street_name]["pot_contribution"]) 
+                                  for position in all_user}
         self.side_pots[street_name]['users_pot_contributions'] = users_pot_contribution
 
-        # 해당 스트릿에서의 모든 유저의 팟 기여도 총합
         contribution_total = self._sum_individual_pot_contrbutions(street_name, all_user)
         self.side_pots[street_name]['contribution_total'] = contribution_total
 
-        # 해당 스트릿까지의 팟 총액 기록
         self.side_pots[street_name]['pot_total'] = self.pot_total
 
         if ratio == True:
@@ -754,30 +783,25 @@ class Base:
                 
                 self.side_pots[street_name]['stake_for_all'][position] = user_stake
 
-        # 지분이 0이 아닌 포지션들만 추려서 오름차순으로 정렬
         contributors_ascending_order = deque(sorted(
             [position for position, contribution in users_pot_contribution.items() if contribution > 0],
             key=lambda position: users_pot_contribution[position]
         ))
 
-        pots = {}  # 각 팟의 금액과 기여한 유저들을 저장할 딕셔너리
-        pot_number = 0  # 사이드 팟 번호를 추적할 변수
+        pots = {}  
+        pot_number = 0 
 
         while contributors_ascending_order:
-            # 가장 적은 지분을 가진 유저의 지분을 공통 지분으로 설정
-            min_contribution = users_pot_contribution[contributors_ascending_order[0]]
-            # 현재 포지션 리스트로 공통 지분을 모은 팟을 생성
-            current_pot_total = min_contribution * len(contributors_ascending_order)
 
+            min_contribution = users_pot_contribution[contributors_ascending_order[0]]
+            current_pot_total = min_contribution * len(contributors_ascending_order)
             contribution_total -= current_pot_total
 
-            # 팟 이름 설정
             if pot_number == 0:
                 pot_name = "main_pot"
             else:
                 pot_name = f"side_pot_{pot_number}"
 
-            # 팟 딕셔너리에 추가
             pots[pot_name] = {}
             pots[pot_name]['size'] = current_pot_total
             pots[pot_name]['contributors'] = list(contributors_ascending_order)
@@ -802,16 +826,27 @@ class Base:
     ####################################################################################################################################################
     ####################################################################################################################################################
 
-    def _blind_post(self):
+    def _blind_post(self) -> (int):
+        '''
+        종류 : 상태변경함수
+        기능 : 변수 초기화
+        목적 : 프리플롭 진행 전 스테이크에 따른 블라인드 값 초기화
+        '''
         if self.stakes == "low":
             sb = 1
             bb = 2
         elif self.stakes == "high":
             sb = 2
             bb = 5
+
         return sb, bb
     
-    def _posting_blind(self, street_name):
+    def _posting_blind(self, street_name: str) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : 변수 초기화
+        목적 : 프리플롭 진행 전 블라인드 포스팅 및 players 딕셔너리에 SB, BB 유저 액션 기록   
+        '''
         if self.stakes == "low":
             self.players["SB"]["stk_size"] -= self.SB
             self.players["BB"]["stk_size"] -= self.BB
@@ -821,7 +856,12 @@ class Base:
             self.players["BB"]["actions"][street_name]["action_list"].append("bet")
             self.pot_total += (self.SB + self.BB)
 
-    def _initialize_start_order(self, street_name):
+    def _initialize_start_order(self, street_name : str) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : 변수 초기화
+        목적 : 스트릿 진행 전 start_order 초기화, 참가 자격이 있는 유저만 start_order 에 등록        
+        '''
         if street_name == 'pre_flop':
             if self.rings == 6:
                 self.start_order = deque(["UTG", "HJ", "CO", "D", "SB", "BB"])
@@ -839,16 +879,37 @@ class Base:
                     new_order.append(position)
             self.start_order = deque(new_order)
 
-    def _initialize_betting_state(self):
-        self.raised_total = 0 # 클라이언트로부터 전달받는 데이터, 전달 받을 때마다 갱신
-        self.bet_amount = 0 # 클라이언트로부터 전달받는 데이터, 전달 받을 때마다 갱신
+    def _initialize_betting_state(self) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : 변수 초기화
+        목적 : 풀콜, 풀레이즈, 풀올인 여부 판단을 위한 정보 제공
+
+        self.raised_total : 클라이언트로부터 전달받는 데이터, 레이즈 총량
+        self.bet_amount : 클라이언트로부터 전달받는 데이터, 벳 금액
+        self.all_in_amount : 올인 금액, 플레이어 스택사이즈 조회   
+        self.LPFB = self.BB : the largest prior full bet = the last legal increment = minimum raise, 최초 LPFB는 BB
+        self.prev_VALID : 콜 액션시 유저의 스택에 남아 있어야 하는 최소 스택 사이즈의 기준
+        self.prev_TOTAL = self.prev_VALID + self.LPFB : 레이즈 액션시 유저의 스택에 남아있어야 하는 최소 스택 사이즈의 기준
+        '''            
+        self.raised_total = 0
+        self.bet_amount = 0 
         self.all_in_amount = 0   
 
-        self.LPFB = self.BB # the largest prior full bet = the last legal increment = minimum raise
-        self.prev_VALID = self.BB  # 콜시 유저의 스택에 남아 있어야 하는 최소 스택 사이즈의 기준
-        self.prev_TOTAL = self.prev_VALID + self.LPFB # 레이즈시 유저의 스택에 남아있어야 하는 최소 스택 사이즈의 기준
+        self.LPFB = self.BB 
+        self.prev_VALID = self.BB  
+        self.prev_TOTAL = self.prev_VALID + self.LPFB
 
-    def _initialize_action_state(self):
+    def _initialize_action_state(self) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : 리스트 초기화, flag 설정 및 변경
+        목적 : 
+
+        self.attack_flag : possible action 을 결정하기 위한 정보 제공
+        self.raise_counter : 5번을 초과해 레이즈 할 수 없도록 레이즈 수를 카운트하기 위한 변수 
+        self.reorder_flag : 언더콜인 올인 발생시 start_order 재정렬 금지하기 위한 플래그
+        '''    
         self.action_queue = deque([])
         self.actioned_queue = deque([])
 
@@ -857,28 +918,37 @@ class Base:
         self.check_users = list()
 
         self.attack_flag = False # only only and just once bet, raise, all-in is True  # 플롭부터는 False로 초기화
-        self.raise_counter = 0 # 5가 되면 Possible action 에서 raise 삭제
-        self.reorder_flag = True # 언더콜인 올인 발생시 actioned_queue에 있는 유저들을 start_order 리스트 뒤에 붙이는 reorder를 금지시키기 위한 플래그
+        self.raise_counter = 0 
+        self.reorder_flag = True # 
 
-    def _initialize_conditions(self):
+    def _initialize_conditions(self) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : flag 설정 및 변경
+        목적 : 핸드 조기종료, 쇼다운 시 카드 오픈 순서 정보 제공, 스트릿 이동시 live hands 전달
+
+        self.survivors : 다음 스트릿으로 갈 생존자 리스트
+        '''
         self.deep_stack_user_counter = 0
-        self.short_stack_end_flag = False # 올인 발생시 딥스택 유저 수 부족으로 바로 핸드 종료시키는 조건
-
+        self.short_stack_end_flag = False  # TDA Rule 16 : Face Up for All
         self.user_card_open_first = False # TDA Rule 16 : Face Up for All
+
         self.table_card_open_first = False
         self.table_card_open_only = False # TDA Rule 18 : Asking to See a Hand
 
         self.river_all_check = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
         self.river_bet_exists = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
 
-        self.survivors = list() # 다음 스트릿으로 갈 생존자 리스트
+        self.survivors = list()
 
-    def _assign_user2pos(self, user_id_list):
-        positions = self._shuffle_positions(self._get_positions(self.rings)) 
-        user2pos = {user_id: position for position, user_id in zip(positions, user_id_list)}
-        return user2pos
-    
-    def _check_connection(self, on_user_list):
+    def _check_connection(self, on_user_list : list) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : 현재 접속중이지 않은 유저들을 fold_users_total 로 이동
+        목적 : 접속 중인 유저를 대상으로 하는 연산에서 제외
+
+        on_user_list : 서버에서 전달 받은 현재 접속 중인 클라이언트들의 유저 아이디 리스트
+        '''
         connected_users = []
         if on_user_list:
             for on_user in on_user_list:
@@ -887,237 +957,3 @@ class Base:
                 if position not in connected_users:
                     self.fold_users_total[position] = self.start_order.popleft()
 
-
-
-    # def _pot_award(self, street_name : str, nuts : dict, users_ranking : deque) -> None:
-    #     '''
-    #     (1) 맨 마지막까지 진행된 스트릿에서만 승자가 나온 경우 
-    #         1. 승자가 한 명일 때
-    #             ㄱ.short all in 으로 이긴 경우
-    #                 $ winner 의 지분을 분배한 후
-    #                 전체팟을 업데이트 하고 
-    #                 winner를 순위표에서 뺀 다음
-    #                 팟 총액이 0이 될때까지 루프 실행  (이하 루프를 환급 함수로 만들고 (2)에서 재사용할 수 있도록 리팩토링)
-    #                     A. 남은 유저 랭킹에서 해당 등수 유저가 여러 명인 경우
-    #                         해당 유저들의 해당 스트릿 팟 기여도를 모두 더한 후
-    #                             a. 기여도 총합이 남은 팟보다 작으면 루프 실행
-    #                                 $ 같은 등수의 유저들에게 각자 자신의 기여도 만큼만 돌려주고, 전체팟을 해당 기여도를 뺀 값으로 업데이트
-    #                             b. 기여도 총합이 남은 팟보다 크면
-    #                                 $ 남은 팟을 각 유저의 팟 기여도 비율 만큼 돌려주고
-    #                                 $ 나머지가 생긴 경우 버튼에서 왼쪽 방향으로 가장 가까운 사람에게 줌
-    #                             환급이 끝난 유저들을 순위표에서 빼고 다시 루프로 돌아감
-    #                     B. 남은 유저 랭킹에서 해당 등수가 유일한 경우의 유저인 경우
-    #                         해당유저의 해당 스트릿에서의 팟 기여도를 계산한 후 
-    #                             $ 기여도가 전체팟보다 크면, 해당 유저에게 남은 팟을 전부 다 돌려주고, 전체 팟은 0으로 업데이트
-    #                             $ 기여도가 전체팟보다 작으면, 기여도 만큼만 돌려주고, 전체팟을 해당 기여도를 뺀 값으로 업데이트
-    #                             환급이 끝난 유저를 순위표에서 빼고 다시 루프로 돌아감
-    #             ㄴ. 그냥 이겼거나 full all in으로 이긴 경우
-    #                 $ 전체팟을 승자에게 모두 주고, 전체팟을 0으로 업데이트
-                        
-    #         2. 승자가 여러 명일 때
-    #             ㄱ. short all in 으로 이긴 사람이 승자 구성에 포함된 경우
-    #                 지분이 가장 작은 순서대로 오름차순 정렬한 다음 (나머지 분배하는 것까지 함수로 만들어 (2).2.ㄱ.A에서 재사용)
-    #                     $ 해당 스트릿에서 무승부인 승자들이 공통으로 가져갈 몫을 먼저 분배 한 후 (아래 로직 틀렸음)
-    #                         공통 몫 = (무승부인 승자들이 포함된 스트리트에서 승자들을 제외한 해당스트리트의 라이브 유저들의 _sum_individual_pot_contributions + 해당스트리트 폴드 유저들의 _sum_individual_pot_contributions + 승자 발생 스트릿 이전 스트릿까지의 팟 총액) // 무승부 인원 수
-    #                     $ 나머지는 버튼에서 왼쪽 방향으로 가장 가까운 사람에게 준 다음
-    #                     $ 남은 팟은 해당 스트릿에서의 각자 지분만큼 돌려주고 전체팟을 업데이트 한다                
-    #             ㄴ. 그냥 이겼거나 full all in으로 이긴 사람으로만 승자가 구성된 경우 
-    #                     $ 전체 팟을 등분하여 무승부인 승자들에게 분배한 후
-    #                     나머지는 버튼에서 왼쪽 방향으로 가장 가까운 사람에게 준다.
-
-    #     (2) 맨 마지막까지 진행된 스트릿 이전 스트릿에서 승자가 나온 경우
-    #         1. 승자가 1명일 때
-    #             ㄱ.이전 스트릿에서 short all in 으로 이기는 경우 밖에 없다.
-    #                 $ winner 의 지분을 분배한 후
-
-    #                 전체팟을 업데이트 하고 
-    #                 winner를 순위표에서 뺀 다음
-    #                 순위표에 남은 유저들 중 승자가 발생한 스트릿 이전 스트릿의 라이브 유저들은 모두 제외하고
-
-    #                 팟 총액이 0이 될때까지 루프 실행  (이하 (1)에서 만든 환급함수 재사용)  
-    #                     A. 남은 유저 랭킹에서 해당 등수 유저가 여러 명인 경우
-    #                         각 유저들의 각 스트릿에서의 팟 기여도를 모두 더한 후
-    #                             a. 기여도 총합이 남은 팟보다 작으면 루프 실행
-    #                                 $ 같은 등수의 유저들에게 각자 자신의 기여도 만큼만 돌려주고, 전체팟을 해당 기여도를 뺀 값으로 업데이트
-    #                             b. 기여도 총합이 남은 팟보다 크면
-    #                                 $ 남은 팟을 각 유저의 팟 기여도 비율 만큼 돌려주고
-    #                                 $ 나머지가 생긴 경우 버튼에서 왼쪽 방향으로 가장 가까운 사람에게 줌
-    #                         환급이 끝난 유저들을 순위표에서 빼고 다시 루프로 돌아감
-                        
-    #                     B. 남은 유저 랭킹에서 해당 등수가 유일한 경우의 유저인 경우
-    #                         해당유저의 해당 스트릿에서의 팟 기여도를 계산한 후 
-    #                             $ 기여도가 전체팟보다 크면, 해당 유저에게 남은 팟을 전부 다 돌려주고, 전체 팟은 0으로 업데이트
-    #                             $ 기여도가 전체팟보다 작으면, 기여도 만큼만 돌려주고, 전체팟을 해당 기여도를 뺀 값으로 업데이트
-    #                             환금이 끝난 유저를 순위표에서 빼고 다시 루프로 돌아감
-                        
-    #                     순위표가 빈 경우 (환급함수와 별도로 구현)
-    #                         패자들 중 승자와 다른 스트릿에 있는 유저들이 있는 경우
-    #                         같은 스트릿에 있는 유저들을 모은 후 루프 실행 
-    #                             해당 유저들에 대해 자신이 액션 종료한 스트릿에서 폴드한 유저들의 individual_pot_contribution을 다 더한 후 
-    #                             이를 등분하여 환급
-
-    #         2. 승자가 여러 명일 때 
-    #             ㄱ. 이전 스트릿에서 short all in 으로 이긴 사람이 승자 구성에 반드시 포함된다
-    #                 A. 무승부 인원들이 같은 스트릿에 있는 경우 
-    #                     지분이 가장 작은 순서대로 오름차순 정렬한 다음    
-    #                         $ 해당 스트릿에서 무승부인 승자들이 공통으로 가져갈 몫을 먼저 분배 한 후
-    #                         $ 나머지는 버튼에서 왼쪽 방향으로 가장 가까운 사람에게 준 다음 (여기까지는 (1) 2.ㄱ. 과 같음)   
-
-    #                     전체팟을 업데이트 하고 
-    #                     무승부 인원들을 순위표에서 뺀 다음
-    #                     순위표에 남은 유저들 중 무승부 승자가 발생한 스트릿 이전 스트릿의 라이브 유저들은 모두 제외하고
-
-    #                     팟 총액이 0이 될때까지 루프 실행  (이하 (1)에서 만든 환급함수 재사용)  
-    #                         A. 남은 유저 랭킹에서 해당 등수 유저가 여러 명인 경우
-    #                             각 유저들의 각 스트릿에서의 팟 기여도를 모두 더한 후
-    #                                 a. 기여도 총합이 남은 팟보다 작으면 루프 실행
-    #                                     $ 같은 등수의 유저들에게 각자 자신의 기여도 만큼만 돌려주고, 전체팟을 해당 기여도를 뺀 값으로 업데이트
-    #                                 b. 기여도 총합이 남은 팟보다 크면
-    #                                     $ 남은 팟을 각 유저의 팟 기여도 비율 만큼 돌려주고
-    #                                     $ 나머지가 생긴 경우 버튼에서 왼쪽 방향으로 가장 가까운 사람에게 줌
-    #                             환급이 끝난 유저들을 순위표에서 빼고 다시 루프로 돌아감
-                            
-    #                         B. 남은 유저 랭킹에서 해당 등수가 유일한 경우의 유저인 경우
-    #                             해당유저의 해당 스트릿에서의 팟 기여도를 계산한 후 
-    #                                 $ 기여도가 전체팟보다 크면, 해당 유저에게 남은 팟을 전부 다 돌려주고, 전체 팟은 0으로 업데이트
-    #                                 $ 기여도가 전체팟보다 작으면, 기여도 만큼만 돌려주고, 전체팟을 해당 기여도를 뺀 값으로 업데이트
-    #                                 환금이 끝난 유저를 순위표에서 빼고 다시 루프로 돌아감
-                            
-    #                         순위표가 빈 경우 (환급함수와 별도로 구현)
-    #                             패자들 중 승자와 다른 스트릿에 있는 유저들이 있는 경우
-    #                             같은 스트릿에 있는 유저들을 모은 후 루프 실행 
-    #                                 해당 유저들에 대해 자신이 액션 종료한 스트릿에서 폴드한 유저들의 individual_pot_contribution을 다 더한 후 
-    #                                 이를 등분하여 환급
-
-    #                 B. 무승부 인원들이 서로 다른 스트릿에 있는 경우
-
-     
-    #     '''
-    #     winner_list = [winner for winner in nuts.keys()]
-    #     final_street_live_hands = self.all_in_users + list(self.actioned_queue)
-    #     #  (1) 맨 마지막까지 진행된 스트릿에서만 승자가 나온 경우 
-    #     if all(winner in final_street_live_hands for winner in winner_list):
-    #         # 승자가 한 명일 때 
-    #         max_value = max(self.side_pots[street_name]['stake_for_all'][winner].values())
-    #         if len(winner_list) == 1:
-    #             winner = winner_list[0]
-    #             # short all in 으로 이긴 경우
-    #             if self.side_pots[street_name]['stake_for_all'][winner] != max_value:
-    #                 # winner 의 지분을 분배한 후 전체팟을 업데이트 하고
-    #                 self.players[winner]['stk_size'] = self.side_pots[street_name]['stake_for_all'][winner]
-    #                 self.pot_total -= self.side_pots[street_name]['stake_for_all'][winner]
-    #                 # winner를 순위표에서 뺀 다음
-    #                 users_ranking.popleft()
-    #                 # 팟 총액이 0이 될때까지 루프 실행
-    #                 while self.pot_total > 0:
-    #                     # 남은 유저 랭킹에서 해당 등수 유저가 여러 명인 경우
-    #                     if isinstance(users_ranking[0], tuple):
-    #                         # 해당 유저들의 해당 스트릿 팟 기여도를 모두 더한 후
-    #                         total_contribution = self._sum_individual_pot_contrbutions(street_name, users_ranking[0])
-    #                         # 기여도 총합이 남은 팟보다 작으면
-    #                         if total_contribution < self.pot_total:
-    #                             # 같은 등수의 유저들에게 각자 자신의 기여도 만큼만 돌려주고, 전체팟을 해당 기여도를 뺀 값으로 업데이트
-    #                             for user in users_ranking[0]:
-    #                                 user_pot_contribution = self._individual_pot_contribution(self.players[user]['actions'][street_name]["pot_contribution"])
-    #                                 self.players[user]['stk_size'] += user_pot_contribution
-    #                                 self.pot_total -= user_pot_contribution
-    #                         # 기여도 총합이 남은 팟보다 크면
-    #                         else:
-    #                             pot_total = self.pot_total
-    #                             total_by_ratio = 0
-    #                             # 남은 팟을 각 유저의 팟 기여도 비율 만큼 돌려주고
-    #                             for user in users_ranking[0]:
-    #                                 user_pot_contribution = self._individual_pot_contribution(self.players[user]['actions'][street_name]["pot_contribution"])
-    #                                 user_pot_contribution_by_ratio = (user_pot_contribution * self.pot_total)  // total_contribution
-    #                                 self.players[user]['stk_size'] += user_pot_contribution_by_ratio
-    #                                 self.pot_total -= user_pot_contribution_by_ratio
-    #                                 total_by_ratio += user_pot_contribution_by_ratio
-    #                             remainder = pot_total - total_by_ratio
-    #                             # 나머지가 생긴 경우 버튼에서 왼쪽 방향으로 가장 가까운 사람에게 준 다음
-    #                             if remainder:
-    #                                 start_order = self._start_order(street_name)
-    #                                 for user in start_order:
-    #                                     if user in self.fold_users_total or user == winner:
-    #                                         continue
-    #                                     elif user not in users_ranking[0]:
-    #                                         continue
-    #                                     else:
-    #                                         self.players[user]['stk_size'] += remainder
-    #                                         self.pot_total -= remainder
-    #                                         break
-    #                         # 같은 등수의 유저들을 순위표에서 빼고 다시 루프로 돌아감
-    #                         users_ranking.popleft()       
-    #                     # 남은 유저 랭킹에서 해당 등수가 유일한 경우의 유저인 경우
-    #                     else:
-    #                         # 해당유저의 해당 스트릿에서의 팟 기여도를 계산한 후              
-    #                         user_pot_contribution = self._individual_pot_contribution(self.players[users_ranking[0]]['actions'][street_name]["pot_contribution"])
-    #                         # 기여도가 전체팟보다 크면
-    #                         if user_pot_contribution >= self.pot_total:
-    #                             #  해당 유저에게 남은 팟을 전부 다 돌려주고, 전체 팟은 0으로 업데이트
-    #                             self.players[users_ranking[0]]['stk_size'] += self.pot_total
-    #                             self.pot_total = 0
-    #                         # 기여도가 전체팟보다 작으면 
-    #                         elif user_pot_contribution < self.pot_total:
-    #                             # 기여도 만큼만 돌려주고, 전체팟을 해당 기여도를 뺀 값으로 업데이트
-    #                             self.players[users_ranking[0]]['stk_size'] += user_pot_contribution
-    #                             self.pot_total -= user_pot_contribution
-    #                         # 환금이 끝난 유저를 순위표에서 빼고 다시 루프로 돌아감
-    #                         users_ranking.popleft()
- 
-    #                 assert self.pot_total == 0           
-    #             # 그냥 이겼거나 full all in으로 이긴 경우, 전체팟을 승자에게 모두 주고, 전체팟을 0으로 업데이트
-    #             else:
-    #                 self.players[winner]['stk_size'] = self.pot_total
-    #                 self.pot_total -= self.pot_total
-    #                 assert self.pot_total == 0  
-    #         # 승자가 여러 명일 때
-    #         elif len(winner_list) > 1:
-    #             # short all in 으로 이긴 사람이 승자 구성에 포함된 경우
-    #             if any(self.side_pots[street_name]['stake_for_all'][winner] != max_value for winner in winner_list):
-    #                 # 지분이 가장 작은 순서대로 오름차순 정렬한 다음
-    #                 tie_winner_list = sorted(winner_list, key=lambda winner: self.side_pots[street_name]['stake_for_all'].get(winner, float('inf')))
-    #                 # 해당 스트릿에서 무승부인 승자들이 공통으로 가져갈 몫을 먼저 분배 한 후
-    #                 losers_list = [user for user in self.live_hands if user not in winner_list]
-    #                 common_share = self.side_pots[street_name]['common_share']   
-    #                 common_share += self._sum_individual_pot_contrbutions(street_name, losers_list)
-    #                 quotient, remainder = divmod(common_share, len(tie_winner_list))
-    #                 for winner in tie_winner_list:
-    #                     self.players[winner]['stk_size'] += quotient
-    #                     self.pot_total -= quotient
-    #                 # 나머지는 버튼에서 왼쪽 방향으로 가장 가까운 사람에게 준 다음
-    #                 start_order = self._start_order(street_name)
-    #                 for user in start_order:
-    #                     if user in self.fold_users_total:
-    #                         continue
-    #                     elif user not in winner_list:
-    #                         continue
-    #                     else:
-    #                         self.players[user]['stk_size'] += remainder
-    #                         self.pot_total -= remainder
-    #                         break
-    #                 # 남은 팟은 해당 스트릿에서의 각자 지분만큼 돌려주고 전체팟을 업데이트 한다
-    #                 for winner in tie_winner_list:
-    #                     stake = self._individual_pot_contribution(self.players[winner]['actions'][street_name]["pot_contribution"])
-    #                     self.players[winner]['stk_size'] += stake
-    #                     self.pot_total -= stake
-    #                 assert self.pot_total == 0
-
-    #             # 그냥 이겼거나 full all in으로 이긴 사람으로만 승자가 구성된 경우
-    #             else:
-    #                 # 전체 팟을 등분하여 무승부인 승자들에게 분배한 후 
-    #                 quotient, remainder = divmod(self.pot_total, len(winner_list))
-    #                 for winner in winner_list:
-    #                     self.players[winner]['stk_size'] = quotient
-    #                     self.pot_total -= quotient
-    #                 # 나머지는 버튼에서 왼쪽 방향으로 가장 가까운 사람에게 준다.
-    #                 for user in self.start_order:
-    #                     if user in self.fold_users_total:
-    #                         continue
-    #                     elif user not in winner_list:
-    #                         continue
-    #                     else:
-    #                         self.players[user]['stk_size'] += remainder
-    #                         self.pot_total -= remainder
-    #                         break
-        
-    #                 assert self.pot_total == 0            
