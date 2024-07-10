@@ -1,0 +1,21 @@
+raise 20
+call
+raise 50
+call
+call
+call
+all-in
+call
+bet 200
+call
+fold
+all-in
+all-in
+bet 100
+call
+check
+all-in
+all-in
+
+
+

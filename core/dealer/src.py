@@ -6,74 +6,70 @@ class Base:
     
     def __init__(self, user_id_list, stk_size, rings, stakes):
 
+        # from floor
         self.user_id_list = user_id_list
         self.stk_size = stk_size
         self.rings = rings
         self.stakes = stakes
-  
-        self.SB, self.BB = self._blind_post()
 
-        self.log_hand_actions = {"pre_flop" : [], "flop" : [], "turn" : [], "river" : []}        
-        self.log_hand_cards = {"burned" : [], "flop" : [], "turn" : [], "river" : [], "table_cards" : []} 
-        
-        self.log_best_hands = OrderedDict() # 쇼다운하여 모든 live_hands 의 best_hands의 랭크 이름과 해당 카드 조합 및 키커를 포지션별로 모은 딕셔너리
-        self.log_nuts = {} # best_hands 중 가장 강력한 핸드를 담은 딕셔너리
-        self.log_users_ranking = None # 유저 랭킹 리스트
-        
-
-        self.positions_6 = ["UTG", "HJ", "CO", "D", "SB", "BB"]
-        self.positions_9 = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
-
-        # user_id to position 딕셔너리 생성
-        self.user2pos = self._assign_user2pos(user_id_list)
-
-        # 덱 생성 및 셔플
+        # initialize self.players
         self.shuffled_deck = self._shuffle_deck()
-
-        # 플레이어 초기화 및 카드 딜링
         self.players, self.stub = self._initialize_players(user_id_list, stk_size, self.shuffled_deck)
+        
+        # initialize street
+        self.start_order : deque = None
+        self.SB, self.BB = self._blind_post()
+        self._initialize_betting_state()
+        self._initialize_action_state()
+        self._initialize_conditions()
 
+        # for end_condition, finishing_street, face_up_user_hand
+        self.all_in_users_total = OrderedDict()
+
+        # for end_condition, finishing_street, check_connection
+        self.fold_users_total = OrderedDict()
+        self.log_community_cards = {"burned" : [], "flop" : [], "turn" : [], "river" : [], "table_cards" : []} 
+
+        # for showdown
+        self.card_rank_order = "23456789TJQKA"
         self.hand_power = {
-            "royal_straight_flush": 10,
-            "straight_flush": 9,
-            "quads": 8,
-            "full_house": 7,
-            "flush": 6,
-            "straight": 5,
-            "set": 4,
-            "trips": 4,
-            "two_pair": 3,
-            "one_pair": 2,
+            "royal_straight_flush": 10, "straight_flush": 9, "quads": 8, "full_house": 7,
+            "flush": 6, "straight": 5, "set": 4, "trips": 4, "two_pair": 3, "one_pair": 2,
             "high_card": 1
         }
+        self.log_nuts = {}
 
-        self.card_rank_order = "23456789TJQKA"
+        # for pot awarding
+        self.pot_total = 0 
+        self.side_pots = defaultdict(dict)
+        self.side_pots["pre_flop"] = {}
+        self.side_pots["flop"] = {}
+        self.side_pots["turn"] = {}
+        self.side_pots["river"] = {}
 
-    def _blind_post(self):
-        if self.stakes == "low":
-            sb = 1
-            bb = 2
-        elif self.stakes == "high":
-            sb = 2
-            bb = 5
-        return sb, bb
+        # for logging
+        self.log_best_hands = OrderedDict()
+        self.log_users_ranking = None 
+        self.log_pot_change = [self.pot_total]
+        self.log_hand_actions = {"pre_flop" : [], "flop" : [], "turn" : [], "river" : []}    
 
+    ####################################################################################################################################################
+    ####################################################################################################################################################
+    #                                                            INITIALIZE CARDS, PLAYERS                                                             #
+    ####################################################################################################################################################
+    #################################################################################################################################################### 
+   
     def _get_positions(self, rings):
         if rings == 6:
-            return self.positions_6
+            return ["UTG", "HJ", "CO", "D", "SB", "BB"]
         elif rings == 9:
-            return self.positions_9
+            return ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
         else:
             raise ValueError("Invalid number of rings. Must be 6 or 9.")
 
     def _shuffle_positions(self, positions): 
         shuffled_positions = random.sample(positions, len(positions))
         return shuffled_positions
-
-    def _assign_user2pos(self, user_id_list):
-        positions = self._shuffle_positions(self._get_positions(self.rings)) 
-        user2pos = {user_id: position for position, user_id in zip(positions, user_id_list)}
-        return user2pos
 
     def _shuffle_deck(self):
         ranks = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
@@ -173,7 +169,7 @@ class Base:
         self.players[current_player]["stk_size"] -= self.bet_amount # 스택사이즈 업데이트
         self.pot_total += self.bet_amount # 팟총액 업데이트
         
-        self.pot_change.append(self.prev_VALID) # 팟 변화량 업데이트
+        self.log_pot_change.append(self.prev_VALID) # 팟 변화량 업데이트
 
         # 로그 업데이트
         betting_size_total["bet"].append(self.prev_VALID)
@@ -232,7 +228,7 @@ class Base:
         self.players[current_player]["stk_size"] -= call_amount # 스택사이즈 업데이트
         self.pot_total += call_amount # 팟 총액 업데이트
 
-        self.pot_change.append(self.prev_VALID)  # 팟 변화량 업데이트
+        self.log_pot_change.append(self.prev_VALID)  # 팟 변화량 업데이트
  
 
         # 로그 업데이트
@@ -281,7 +277,7 @@ class Base:
         self.players[current_player]["stk_size"] -= raise_amount # 스택 사이즈 업데이트
         self.pot_total += raise_amount # 팟 총액 업데이트
 
-        self.pot_change.append(self.prev_VALID)  # 팟 변화량 업데이트
+        self.log_pot_change.append(self.prev_VALID)  # 팟 변화량 업데이트
 
         # 로그 업데이트
         betting_size_total["raise"].append(self.prev_VALID)
@@ -350,7 +346,7 @@ class Base:
         self.players[current_player]["stk_size"] -= self.all_in_amount # 스택 사이즈 업데이트
         self.pot_total += self.all_in_amount # 팟 총액 업데이트
       
-        self.pot_change.append(self.all_in_amount)  # 팟 변화량 업데이트
+        self.log_pot_change.append(self.all_in_amount)  # 팟 변화량 업데이트
 
         # 로그 업데이트
         betting_size_total["all-in"].append(self.all_in_amount)
@@ -411,29 +407,134 @@ class Base:
     #                                                                AUXILIARY SHOWDOWN                                                                #
     ####################################################################################################################################################
     ####################################################################################################################################################
-   
-    def _card_rank(self, card):
-            return self.card_rank_order.index(card[0])
-
-    def _flush(self, cards):
-            suits = [card[1] for card in cards]
-            return len(set(suits)) == 1
-
-    def _straight(self, cards):
-        ranks = sorted(set(self._card_rank(card) for card in cards), reverse=True)
-        for i in range(len(ranks) - 4):
-            if ranks[i] - ranks[i + 4] == 4:
-                return True
-        return False
     
+    def _face_up_community_cards(self, street_name : str) -> list: 
+        self.log_community_cards['burned'].append(self.stub.pop(0)) # 버닝
+        if street_name == 'flop':
+            for _ in range(3):
+                self.log_community_cards[street_name].append(self.stub.pop(0))
+        else:
+            self.log_community_cards[street_name].append(self.stub.pop(0))
+
+        return self.log_community_cards[street_name]
+    
+    def _face_up_community_cards_for_showdown(self, street_name :str) -> list :
+
+        if street_name == 'pre_flop':
+            self._face_up_community_cards('flop')
+            self._face_up_community_cards('turn')
+            self._face_up_community_cards('river')
+        elif street_name == 'flop':
+            self._face_up_community_cards('turn')
+            self._face_up_community_cards('river')
+        elif street_name == 'turn':
+            self._face_up_community_cards('river')
+
+        self.log_community_cards["table_cards"] = self.log_community_cards["flop"] + self.log_community_cards["turn"] + self.log_community_cards["river"]
+        community_cards: list = self.log_community_cards["table_cards"]
+
+        return community_cards
+    
+    def _face_up_user_hand(self):
+        user_hand = dict()
+        all_user = [position for position in self.all_in_users_total] + list(self.actioned_queue)
+        for position in all_user:
+            starting_cards = self.players[position]['starting_cards']
+            user_hand[position] = starting_cards
+        return user_hand
+
+    def _compare_hand(self, user_cards : dict, community_cards : list):
+
+        for position in user_cards:
+            pocket_cards = user_cards[position]
+            best_hands = self._make_best_hands(pocket_cards, community_cards)
+            self.log_best_hands[position] = best_hands
+
+        best_rank = 0
+        nuts_positions = []
+
+        # 각 위치별로 최고의 핸드를 검색
+        for position, best_hands_dict in self.log_best_hands.items():
+            # 현재 위치의 가장 높은 랭크와 해당 핸드를 검색
+            highest_rank, hand = max(best_hands_dict.items(), key=lambda item: self.hand_power.get(item[0], 0))
+            current_rank = self.hand_power.get(highest_rank, 0)
+            
+            # 현재 랭크가 가장 높은 랭크보다 높으면 업데이트
+            if current_rank > best_rank:
+                best_rank = current_rank
+                nuts_positions = [position]
+            # 현재 랭크가 가장 높은 랭크와 같으면 위치 추가
+            elif current_rank == best_rank:
+                nuts_positions.append(position)
+
+        # 타이가 발생하는 경우 카드 랭크와 키커로 넛츠 판별. 무승부시 복수 넛츠 허용
+        if len(nuts_positions) > 1:
+            final_nuts_positions = self._resolve_ties(nuts_positions)
+            nuts_positions = final_nuts_positions
+
+        for position in nuts_positions:
+            self.log_nuts[position] = self.log_best_hands[position]
+
+        # live hands의 베스트 핸드를 랭크 순위대로 정렬하여 users_ranking 리스트 작성
+        self.log_users_ranking = self._users_ranking()
+
+        nuts = self.log_nuts
+
+        return nuts
+    
+    def _make_best_hands(self, pocket_cards, community_cards):
+        best_rank_name = None
+        best_hand = None
+        best_rank_value = 0
+        best_hands_dict = defaultdict(list)
+        live_hands = pocket_cards + community_cards
+
+        for combo in combinations(live_hands, 5):
+            rank_name, hand = self._classify_hand(list(combo), pocket_cards)
+            rank_value = self.hand_power[rank_name]
+            if rank_value > best_rank_value:
+                best_rank_name = rank_name
+                best_rank_value = rank_value
+                best_hands_dict[rank_name] = [hand]
+            elif rank_value == best_rank_value:
+                best_hands_dict[rank_name].append(hand)
+
+        # 가장 높은 핸드 조합 선택
+        best_hand = max(best_hands_dict[best_rank_name], key=lambda hand: [self._card_rank(card) for card in hand])
+        remaining_cards = [card for card in live_hands if card not in best_hand]
+        best_kicker = sorted(remaining_cards, key=self._card_rank, reverse=True)
+
+        kicker_mapping = {
+            "one_pair": 3,
+            "two_pair": 1,
+            "trips": 2,
+            "quads": 1 if all(card in community_cards for card in best_hand) else 0
+        }
+
+        best_kicker = best_kicker[:kicker_mapping.get(best_rank_name, 0)]
+
+        return {best_rank_name: best_hand, "kicker": best_kicker}
+
     def _classify_hand(self, cards, pocket_cards):
+
+        def _flush(cards):
+                suits = [card[1] for card in cards]
+                return len(set(suits)) == 1
+
+        def _straight(cards):
+            ranks = sorted(set(self._card_rank(card) for card in cards), reverse=True)
+            for i in range(len(ranks) - 4):
+                if ranks[i] - ranks[i + 4] == 4:
+                    return True
+            return False
+
         cards = sorted(cards, key=self._card_rank, reverse=True)
         ranks = [card[0] for card in cards]
         rank_counts = Counter(ranks)
         counts = sorted(rank_counts.values(), reverse=True)
 
-        made_flush = self._flush(cards)
-        made_straight = self._straight(cards)
+        made_flush = _flush(cards)
+        made_straight = _straight(cards)
 
         if made_flush and made_straight:
             if ranks[:5] == ['A', 'K', 'Q', 'J', 'T']:
@@ -479,39 +580,9 @@ class Base:
             return "one_pair", one_pair
 
         return "high_card", cards[:5]
-    
-    def _make_best_hands(self, pocket_cards, community_cards):
-        best_rank_name = None
-        best_hand = None
-        best_rank_value = 0
-        best_hands_dict = defaultdict(list)
-        live_hands = pocket_cards + community_cards
 
-        for combo in combinations(live_hands, 5):
-            rank_name, hand = self._classify_hand(list(combo), pocket_cards)
-            rank_value = self.hand_power[rank_name]
-            if rank_value > best_rank_value:
-                best_rank_name = rank_name
-                best_rank_value = rank_value
-                best_hands_dict[rank_name] = [hand]
-            elif rank_value == best_rank_value:
-                best_hands_dict[rank_name].append(hand)
-
-        # 가장 높은 핸드 조합 선택
-        best_hand = max(best_hands_dict[best_rank_name], key=lambda hand: [self._card_rank(card) for card in hand])
-        remaining_cards = [card for card in live_hands if card not in best_hand]
-        best_kicker = sorted(remaining_cards, key=self._card_rank, reverse=True)
-
-        kicker_mapping = {
-            "one_pair": 3,
-            "two_pair": 1,
-            "trips": 2,
-            "quads": 1 if all(card in community_cards for card in best_hand) else 0
-        }
-
-        best_kicker = best_kicker[:kicker_mapping.get(best_rank_name, 0)]
-
-        return {best_rank_name: best_hand, "kicker": best_kicker}
+    def _card_rank(self, card):
+            return self.card_rank_order.index(card[0])
 
     def _resolve_ties(self, nuts_positions):
         if len(nuts_positions) <= 1:
@@ -562,13 +633,6 @@ class Base:
 
         return final_nuts_positions
 
-    def _hand_key(self, position):
-        hand_name = next(iter(self.log_best_hands[position]))
-        hand_combinations = self.log_best_hands[position][hand_name]
-        card_ranks = [self._card_rank(card) for card in hand_combinations]
-        kicker_ranks = [self._card_rank(card) for card in self.log_best_hands[position].get('kicker', [])]
-        return (self.hand_power[hand_name], card_ranks, kicker_ranks)
-
     def _users_ranking(self) -> list:
         '''
         쇼다운 결과 커뮤니티 카드 5장과 유저의 스타팅 카드 2장으로 만들수 있는
@@ -579,8 +643,15 @@ class Base:
         핸드의 파워가 강력한 순서로 해당 핸드를 가진 유저의 포지션을 내림차순 정렬하고,
         키커까지 모두 똑같아서 무승부인 유저들은 튜플로 묶은 리스트를 반환하는 함수
         '''
+        def _hand_key(position):
+            hand_name = next(iter(self.log_best_hands[position]))
+            hand_combinations = self.log_best_hands[position][hand_name]
+            card_ranks = [self._card_rank(card) for card in hand_combinations]
+            kicker_ranks = [self._card_rank(card) for card in self.log_best_hands[position].get('kicker', [])]
+
+            return (self.hand_power[hand_name], card_ranks, kicker_ranks)
         positions = list(self.log_best_hands.keys())
-        users_ranking_list = sorted(positions, key=lambda position: self._hand_key(position), reverse=True)
+        users_ranking_list = sorted(positions, key=lambda position: _hand_key(position), reverse=True)
         
         tied_players = []
         ranked_users = []
@@ -589,7 +660,7 @@ class Base:
         current_tie_group = []
 
         for pos in users_ranking_list:
-            current_key = self._hand_key(pos)
+            current_key = _hand_key(pos)
 
             if previous_key is not None and current_key == previous_key:
                 current_tie_group.append(pos)
@@ -614,45 +685,6 @@ class Base:
         users_ranking = deque(ranked_users).copy()
 
         return users_ranking
-    
-    def _compare_hand(self, user_cards : dict, community_cards : list):
-
-        for position in user_cards:
-            pocket_cards = user_cards[position]
-            best_hands = self._make_best_hands(pocket_cards, community_cards)
-            self.log_best_hands[position] = best_hands
-
-        best_rank = 0
-        nuts_positions = []
-
-        # 각 위치별로 최고의 핸드를 검색
-        for position, best_hands_dict in self.log_best_hands.items():
-            # 현재 위치의 가장 높은 랭크와 해당 핸드를 검색
-            highest_rank, hand = max(best_hands_dict.items(), key=lambda item: self.hand_power.get(item[0], 0))
-            current_rank = self.hand_power.get(highest_rank, 0)
-            
-            # 현재 랭크가 가장 높은 랭크보다 높으면 업데이트
-            if current_rank > best_rank:
-                best_rank = current_rank
-                nuts_positions = [position]
-            # 현재 랭크가 가장 높은 랭크와 같으면 위치 추가
-            elif current_rank == best_rank:
-                nuts_positions.append(position)
-
-        # 타이가 발생하는 경우 카드 랭크와 키커로 넛츠 판별. 무승부시 복수 넛츠 허용
-        if len(nuts_positions) > 1:
-            final_nuts_positions = self._resolve_ties(nuts_positions)
-            nuts_positions = final_nuts_positions
-
-        for position in nuts_positions:
-            self.log_nuts[position] = self.log_best_hands[position]
-
-        # live hands의 베스트 핸드를 랭크 순위대로 정렬하여 users_ranking 리스트 작성
-        self.log_users_ranking = self._users_ranking()
-
-        nuts = self.log_nuts
-
-        return nuts
     
     ####################################################################################################################################################
     ####################################################################################################################################################
@@ -766,9 +798,18 @@ class Base:
     
     ####################################################################################################################################################
     ####################################################################################################################################################
-    #                                                                    AUXILIARY                                                                     #
+    #                                                                  AUXILIARY ETC                                                                   #
     ####################################################################################################################################################
     ####################################################################################################################################################
+
+    def _blind_post(self):
+        if self.stakes == "low":
+            sb = 1
+            bb = 2
+        elif self.stakes == "high":
+            sb = 2
+            bb = 5
+        return sb, bb
     
     def _posting_blind(self, street_name):
         if self.stakes == "low":
@@ -780,6 +821,63 @@ class Base:
             self.players["BB"]["actions"][street_name]["action_list"].append("bet")
             self.pot_total += (self.SB + self.BB)
 
+    def _initialize_start_order(self, street_name):
+        if street_name == 'pre_flop':
+            if self.rings == 6:
+                self.start_order = deque(["UTG", "HJ", "CO", "D", "SB", "BB"])
+            elif self.rings == 9:
+                self.start_order = deque(['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB'])
+        else:
+            if self.rings == 6:
+                self.start_order = deque(["SB", "BB", "UTG", "HJ", "CO", "D"])
+            elif self.rings == 9:
+                self.start_order = deque(['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D'])
+            new_order = []
+            while self.start_order:
+                position = self.start_order.popleft()
+                if position in self.survivors:
+                    new_order.append(position)
+            self.start_order = deque(new_order)
+
+    def _initialize_betting_state(self):
+        self.raised_total = 0 # 클라이언트로부터 전달받는 데이터, 전달 받을 때마다 갱신
+        self.bet_amount = 0 # 클라이언트로부터 전달받는 데이터, 전달 받을 때마다 갱신
+        self.all_in_amount = 0   
+
+        self.LPFB = self.BB # the largest prior full bet = the last legal increment = minimum raise
+        self.prev_VALID = self.BB  # 콜시 유저의 스택에 남아 있어야 하는 최소 스택 사이즈의 기준
+        self.prev_TOTAL = self.prev_VALID + self.LPFB # 레이즈시 유저의 스택에 남아있어야 하는 최소 스택 사이즈의 기준
+
+    def _initialize_action_state(self):
+        self.action_queue = deque([])
+        self.actioned_queue = deque([])
+
+        self.all_in_users = list()
+        self.fold_users = list()
+        self.check_users = list()
+
+        self.attack_flag = False # only only and just once bet, raise, all-in is True  # 플롭부터는 False로 초기화
+        self.raise_counter = 0 # 5가 되면 Possible action 에서 raise 삭제
+        self.reorder_flag = True # 언더콜인 올인 발생시 actioned_queue에 있는 유저들을 start_order 리스트 뒤에 붙이는 reorder를 금지시키기 위한 플래그
+
+    def _initialize_conditions(self):
+        self.deep_stack_user_counter = 0
+        self.short_stack_end_flag = False # 올인 발생시 딥스택 유저 수 부족으로 바로 핸드 종료시키는 조건
+
+        self.user_card_open_first = False # TDA Rule 16 : Face Up for All
+        self.table_card_open_first = False
+        self.table_card_open_only = False # TDA Rule 18 : Asking to See a Hand
+
+        self.river_all_check = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
+        self.river_bet_exists = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
+
+        self.survivors = list() # 다음 스트릿으로 갈 생존자 리스트
+
+    def _assign_user2pos(self, user_id_list):
+        positions = self._shuffle_positions(self._get_positions(self.rings)) 
+        user2pos = {user_id: position for position, user_id in zip(positions, user_id_list)}
+        return user2pos
+    
     def _check_connection(self, on_user_list):
         connected_users = []
         if on_user_list:
@@ -789,55 +887,6 @@ class Base:
                 if position not in connected_users:
                     self.fold_users_total[position] = self.start_order.popleft()
 
-    def _start_order(self, street_name):
-        if street_name == 'pre_flop':
-            if self.rings == 6:
-                start_order =["UTG", "HJ", "CO", "D", "SB", "BB"]             
-            elif self.rings == 6:
-                start_order = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
-        else:
-            if self.rings == 6:
-                start_order = ["SB", "BB", "UTG", "HJ", "CO", "D"]            
-            elif self.rings == 9:
-                start_order = ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D']     
-
-        return start_order
-
-    def _face_up_community_cards(self, street_name : str) -> list: 
-        self.log_hand_cards['burned'].append(self.stub.pop(0)) # 버닝
-        if street_name == 'flop':
-            for _ in range(3):
-                self.log_hand_cards[street_name].append(self.stub.pop(0))
-        else:
-            self.log_hand_cards[street_name].append(self.stub.pop(0))
-
-        return self.log_hand_cards[street_name]
-    
-    def _face_up_community_cards_for_showdown(self, street_name :str) -> list :
-
-        if street_name == 'pre_flop':
-            self._face_up_community_cards('flop')
-            self._face_up_community_cards('turn')
-            self._face_up_community_cards('river')
-        elif street_name == 'flop':
-            self._face_up_community_cards('turn')
-            self._face_up_community_cards('river')
-        elif street_name == 'turn':
-            self._face_up_community_cards('river')
-
-        self.log_hand_cards["table_cards"] = self.log_hand_cards["flop"] + self.log_hand_cards["turn"] + self.log_hand_cards["river"]
-        community_cards: list = self.log_hand_cards["table_cards"]
-
-        return community_cards
-    
-    def _face_up_user_hand(self):
-        user_hand = dict()
-        all_user = [position for position in self.all_in_users_total] + list(self.actioned_queue)
-        for position in all_user:
-            starting_cards = self.players[position]['starting_cards']
-            user_hand[position] = starting_cards
-        return user_hand
-    
 
 
     # def _pot_award(self, street_name : str, nuts : dict, users_ranking : deque) -> None:

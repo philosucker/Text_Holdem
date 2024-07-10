@@ -1,84 +1,29 @@
-from src import Base
+
 from collections import deque, OrderedDict, defaultdict
-from itertools import combinations
+import configparser
 import sys
+import os
+from src import Base
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+test_dir = os.path.join(current_dir, 'test')
+sys.path.append(test_dir)
+
+from test_helper import *
 
 class Dealer(Base):
 
     def __init__(self, user_id_list, stk_size, rings, stakes):
         super().__init__(user_id_list, stk_size, rings, stakes)
 
-        self.start_order = None
-
-        self.all_in_users_total = OrderedDict()
-        self.fold_users_total = OrderedDict()
-
-        self.pot_total = 0 # 팟 총액
-        self.pot_change = [self.pot_total]
-
-        self.side_pots = defaultdict(dict)
-        self.side_pots["pre_flop"] = {}
-        self.side_pots["flop"] = {}
-        self.side_pots["turn"] = {}
-        self.side_pots["river"] = {}
-
-        self.street_name = ["pre_flop", "flop", "turn", "river"]
-
-        self._initialize_betting_state()
-        self._initialize_action_state()
-        self._initialize_conditions()      
-
-    def _initialize_betting_state(self):
-        self.raised_total = 0 # 클라이언트로부터 전달받는 데이터, 전달 받을 때마다 갱신
-        self.bet_amount = 0 # 클라이언트로부터 전달받는 데이터, 전달 받을 때마다 갱신
-        self.all_in_amount = 0   
-
-        self.LPFB = self.BB # the largest prior full bet = the last legal increment = minimum raise
-        self.prev_VALID = self.BB  # 콜시 유저의 스택에 남아 있어야 하는 최소 스택 사이즈의 기준
-        self.prev_TOTAL = self.prev_VALID + self.LPFB # 레이즈시 유저의 스택에 남아있어야 하는 최소 스택 사이즈의 기준
-
-    def _initialize_action_state(self):
-        self.action_queue = deque([])
-        self.actioned_queue = deque([])
-
-        self.all_in_users = list()
-        self.fold_users = list()
-        self.check_users = list()
-
-        self.attack_flag = False # only only and just once bet, raise, all-in is True  # 플롭부터는 False로 초기화
-        self.raise_counter = 0 # 5가 되면 Possible action 에서 raise 삭제
-        self.reorder_flag = True # 언더콜인 올인 발생시 actioned_queue에 있는 유저들을 start_order 리스트 뒤에 붙이는 reorder를 금지시키기 위한 플래그
-
-    def _initialize_conditions(self):
-        self.deep_stack_user_counter = 0
-        self.short_stack_end_flag = False # 올인 발생시 딥스택 유저 수 부족으로 바로 핸드 종료시키는 조건
-
-        self.user_card_open_first = False # TDA Rule 16 : Face Up for All
-        self.table_card_open_first = False
-        self.table_card_open_only = False # TDA Rule 18 : Asking to See a Hand
-
-        self.river_all_check = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
-        self.river_bet_exists = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
-
-        self.survivors = list() # 다음 스트릿으로 갈 생존자 리스트
-
-    def _initialize_start_order(self, street_name):
-        if street_name == 'pre_flop':
-            if self.rings == 6:
-                self.start_order = deque(["UTG", "HJ", "CO", "D", "SB", "BB"])
-            elif self.rings == 9:
-                self.start_order = deque(['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB'])
-        else:
-            if self.rings == 6:
-                self.start_order = deque(["SB", "BB", "UTG", "HJ", "CO", "D"])
-            elif self.rings == 9:
-                self.start_order = deque(['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D'])
-            new_order = []
-            while self.start_order:
-                position = self.start_order.popleft()
-                if position in self.survivors:
-                    new_order.append(position)
-            self.start_order = deque(new_order)
+        self.config = configparser.ConfigParser()
+        self.config.read('/home/philosucker/holdem/core/dealer/test/config.ini')
+        self.just_get_input = just_get_input.__get__(self)
+        self.get_input_prompt = get_input_prompt.__get__(self)
+        self.test_code_action_info = test_code_action_info.__get__(self)
+        self.test_code_street_info = test_code_street_info.__get__(self)
+        self.test_code_showdown_info = test_code_showdown_info.__get__(self)
+        self.test_code_pot_award_info = test_code_pot_award_info.__get__(self)
 
     ####################################################################################################################################################
     ####################################################################################################################################################
@@ -208,8 +153,8 @@ class Dealer(Base):
             # answer = 서버로부터 전달받은 유저의 액션 내용이 담긴 딕셔너리 
 
             # 테스트 코드
-            # answer = self.test_code_action_info(current_player, possible_actions, street_name)
-            answer = self.get_input()
+            answer = self.test_code_action_info(current_player, possible_actions, street_name)
+            answer = self.just_get_input()
 
             # 클라이언트에게 전달 받은 응답이 call 이면
             if next(iter(answer)) == "call":
@@ -273,7 +218,7 @@ class Dealer(Base):
         self.survivors.extend(list(self.actioned_queue))
 
         # 테스트 코드
-        # self.test_code_street_info(street_name)
+        self.test_code_street_info(street_name)
     
     ####################################################################################################################################################
     ####################################################################################################################################################
@@ -339,9 +284,9 @@ class Dealer(Base):
             open_order = []
             for stage in stages.get(street_name, []):
                 if isinstance(stage, tuple):
-                    open_order.append(self.log_hand_cards[stage[0]][stage[1]])
+                    open_order.append(self.log_community_cards[stage[0]][stage[1]])
                 else:
-                    open_order.append(self.log_hand_cards[stage])
+                    open_order.append(self.log_community_cards[stage])
             return open_order
         
         community_cards : list = self._face_up_community_cards_for_showdown(street_name) # _face_up_community_cards_for_showdown 호출 후
@@ -406,9 +351,24 @@ class Dealer(Base):
         return nuts
 
     def _pot_award(self, nuts, street_name) -> None:
-        winner_list = [winner for winner in nuts.keys()]
+
+        def _start_order(street_name):
+            if street_name == 'pre_flop':
+                if self.rings == 6:
+                    start_order =["UTG", "HJ", "CO", "D", "SB", "BB"]             
+                elif self.rings == 6:
+                    start_order = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
+            else:
+                if self.rings == 6:
+                    start_order = ["SB", "BB", "UTG", "HJ", "CO", "D"]            
+                elif self.rings == 9:
+                    start_order = ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D']     
+
+            return start_order
         
-        for street in self.street_name:
+        winner_list = [winner for winner in nuts.keys()]
+        street_list = ["pre_flop", "flop", "turn", "river"]
+        for street in street_list:
             pots = self.side_pots[street].get('pots', {})
             for _ , pot in pots.items():
                 pot_size = pot['size']
@@ -432,7 +392,7 @@ class Dealer(Base):
                             self.players[winner]['stk_size'] += quotient
                             self.pot_total -= quotient
                         if remainder:
-                            for user in self._start_order(street_name):
+                            for user in _start_order(street_name):
                                 if user in winner_list:
                                     self.players[user]['stk_size'] += remainder
                                     self.pot_total -= remainder
@@ -463,7 +423,7 @@ class Dealer(Base):
         if showdown:
             nuts = self._showdown(street_name)
              # 테스트 코드
-            # self.test_code_showdown_info()
+            self.test_code_showdown_info()
 
             self._pot_award(nuts, street_name)
             
@@ -482,7 +442,7 @@ class Dealer(Base):
         if showdown:
             nuts = self._showdown(street_name)
              # 테스트 코드
-            # self.test_code_showdown_info()
+            self.test_code_showdown_info()
 
             self._pot_award(nuts, street_name)
 
@@ -501,7 +461,7 @@ class Dealer(Base):
         if showdown:
             nuts = self._showdown(street_name)
              # 테스트 코드
-            # self.test_code_showdown_info()
+            self.test_code_showdown_info()
 
             self._pot_award(nuts, street_name)
 
@@ -520,7 +480,7 @@ class Dealer(Base):
         if showdown:
             nuts = self._showdown(street_name)
              # 테스트 코드
-            # self.test_code_showdown_info()
+            self.test_code_showdown_info()
 
             self._pot_award(nuts, street_name)
 
@@ -537,97 +497,3 @@ class Dealer(Base):
 
     def go_street(self, stk_size):
         self._preFlop(stk_size)     
-
-    ####################################################################################################################################################
-    ####################################################################################################################################################
-    #                                                                    TEST CODE                                                                     #
-    ####################################################################################################################################################
-    ####################################################################################################################################################
-
-    def get_input(self):
-        input_line = sys.stdin.readline().strip()
-        parts = input_line.split()
-        
-        if len(parts) == 2:
-            key = parts[0]
-            try:
-                value = int(parts[1])
-            except ValueError:
-                value = None
-        elif len(parts) == 1:
-            key = parts[0]
-            value = None
-        else:
-            raise ValueError("Invalid input format. Expected format: 'string' or 'string int'")
-
-        return {key: value}
-        
-    def get_input_prompt(self, prompt):
-        print(prompt)
-        input_line = sys.stdin.readline().strip()
-        parts = input_line.split()
-        
-        if len(parts) == 2:
-            key = parts[0]
-            try:
-                value = int(parts[1])
-            except ValueError:
-                value = None
-        elif len(parts) == 1:
-            key = parts[0]
-            value = None
-        else:
-            raise ValueError("Invalid input format. Expected format: 'string' or 'string int'")
-
-        return {key: value}
-    
-    def test_code_action_info(self, current_player, possible_actions, street_name):
-        print(f'{street_name} 스트리트 입니다')
-        stack_size = self.players[current_player]['stk_size']
-        print(f'LPFB : {self.LPFB}')
-        print(f'prev_VALID : {self.prev_VALID}')
-        print(f'prev_TOTAL : {self.prev_TOTAL}')
-        print(f'{current_player} 님의 현재 스택사이즈는 {stack_size}입니다')
-        print(f'{current_player} 님의 가능한 액션은 {possible_actions} 입니다') 
-        answer = self.get_input_prompt(f'{current_player} 님 액션을 입력해 주세요')    
-        print(f'{current_player}님의 액션은 {next(iter(answer))} 입니다')
-        print()
-        return answer
-
-    def test_code_street_info(self, street_name):
-        print()
-        print(f'==============={street_name} 스트리트===============')
-        print(f'actioned_queue: {self.actioned_queue}')
-        print(f'fold_users: {self.fold_users}')
-        print(f'fold_users_total: {self.fold_users_total}')
-        print(f'all_in_users: {self.all_in_users}')
-        print(f'all_in_users_total: {self.all_in_users_total}')
-        print()
-        print(f'일어난 모든 액션들의 내용을 일어난 순서대로 기록: {self.log_hand_actions}')
-        print(f'pot_total : {self.pot_total}')
-        print(f'생존자 : {self.survivors}')
-        print()
-
-    def test_code_showdown_info(self):
-        print("=====================쇼다운 결과=====================")
-        print(f'best hands : {self.log_best_hands}')
-        print(f'users_ranking : {self.log_users_ranking}')
-        print(f'nuts : {self.log_nuts}')
-        print()
-
-    def test_code_pot_award_info(self, stk_size):
-        # if len(self.log_nuts) == 3 or len(self.log_nuts) == 4 or len(self.log_nuts) == 5:
-        if len(self.log_nuts) == 2:
-            print("=====================팟분배 결과=====================")
-            print(f'users_ranking : {self.log_users_ranking}')
-            for id, position in zip(stk_size, self.players):
-                stack_size = self.players[position]['stk_size']
-                print(f'{position} 의 stk_size 변화 : {stk_size[id]} -> {stack_size}')
-
-
-
-
-
-
-
-
