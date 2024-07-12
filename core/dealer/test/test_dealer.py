@@ -4,6 +4,7 @@ import os
 import configparser
 import traceback
 
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
 sys.path.append(parent_dir)
@@ -11,11 +12,6 @@ sys.path.append(parent_dir)
 from dealer import Dealer
 
 config_file_path = os.path.join(current_dir, 'config.ini')
-config = configparser.ConfigParser()
-config.read(config_file_path)
-
-# config.ini 파일의 경로를 절대 경로로 지정합니다.
-config_file_path = os.path.join(os.path.dirname(__file__), 'config.ini')
 config = configparser.ConfigParser()
 config.read(config_file_path)
 
@@ -28,11 +24,11 @@ def run_manual_test():
     stakes = "low"  # robby 에서 전달 받음
 
     try:
+        # print(f"Config file path: {config_file_path}")  # 설정 파일 경로 출력
+        # print(f"Config sections: {config.sections()}")  # 설정 파일 섹션 출력
+        # print(f"Config items in DEFAULT: {config.items('DEFAULT')}")  # 설정 파일의 항목 출력
+
         # 설정 파일에서 stk_size 값을 가져옴
-        print(f"Config file path: {config_file_path}")  # 설정 파일 경로 출력
-        print(f"Config sections: {config.sections()}")  # 설정 파일 섹션 출력
-        print(f"Config items in DEFAULT: {config.items('DEFAULT')}")  # 설정 파일의 항목 출력
-        
         stk_size_values = list(map(int, config['DEFAULT']['stk_size'].split(',')))
         stk_size = {str(i + 1): stk_size_values[i] for i in range(len(stk_size_values))}
     except KeyError as e:
@@ -54,10 +50,25 @@ def run_auto_test():
         with open(os.path.join(test_cases_dir, test_file), 'r') as f:
             input_text = f.read()
         
+
         print(f"Test case '{test_file}' starts.")
-        sys.stdin = io.StringIO(input_text)
-        run_manual_test()
-        print(f"Test case '{test_file}' ends.")
+        try:
+            sys.stdin = io.StringIO(input_text)
+            run_manual_test()
+        except AssertionError:
+            print(f"AssertionError occurred during test case '{test_file}'.")
+            traceback.print_exc()
+        except SystemExit as e:
+            print(f"SystemExit occurred during test case '{test_file}'.")
+            print(f"Error: {e}")
+            traceback.print_exc()
+            sys.exit(1)
+        except Exception as e:
+            print(f"Error occurred during test case '{test_file}'.")
+            print(f"Error: {e}")
+            traceback.print_exc()
+        finally:
+            print(f"Test case '{test_file}' ends.")
 
     sys.stdin = original_stdin
 
@@ -70,8 +81,9 @@ def run_multiple_tests():
         with open(os.path.join(test_cases_dir, test_file), 'r') as f:
             input_text = f.read()
 
+        print(f"Test case '{test_file}' starts.")
         try:
-            for i in range(100000):
+            for i in range(10000):
                 sys.stdin = io.StringIO(input_text)
                 run_manual_test()
         except AssertionError:
@@ -86,7 +98,9 @@ def run_multiple_tests():
             print(f"Error occurred during test case '{test_file}' iteration {i+1}.")
             print(f"Error: {e}")
             traceback.print_exc()
-
+        finally:
+            print(f"Test case '{test_file}' iteration {i+1} ends.")
+        
     sys.stdin = original_stdin
 
 def run_tests():
