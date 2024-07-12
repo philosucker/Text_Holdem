@@ -730,8 +730,8 @@ class Base:
         '''
         pot_contribution = path
         total_sum = 0
-        for key in pot_contribution:
-            total_sum += sum(pot_contribution[key])
+        for action in pot_contribution:
+            total_sum += sum(pot_contribution[action])
 
         return total_sum
 
@@ -818,7 +818,683 @@ class Base:
             return pots
         else:
             raise ValueError("Sidepot calculation is incorrect.")
-    
+
+
+    def _pot_award_1(self, nuts : dict, street_name : str) -> None:
+        # 기여도 유무 논리 (메인팟, 사이드팟으로 승자와 패자의 팟 분배)
+        def _start_order(street_name):
+            if street_name == 'pre_flop':
+                if self.rings == 6:
+                    start_order =["UTG", "HJ", "CO", "D", "SB", "BB"]             
+                elif self.rings == 9:
+                    start_order = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
+            else:
+                if self.rings == 6:
+                    start_order = ["SB", "BB", "UTG", "HJ", "CO", "D"]            
+                elif self.rings == 9:
+                    start_order = ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D']     
+
+            return start_order
+        
+        winner_list = [winner for winner in nuts.keys()]
+        street_list = ["pre_flop", "flop", "turn", "river"]
+        for street in street_list:
+            pots = self.side_pots[street].get('pots', {})
+            for _ , pot in pots.items():
+                pot_size = pot['size']
+                contributors = pot['contributors']
+
+                if len(winner_list) == 1:
+                    winner = winner_list[0]
+                    if winner in contributors:
+                        self.players[winner]['stk_size'] += pot_size
+                        self.pot_total -= pot_size
+                    else:
+                        share = pot_size // len(contributors)
+                        for user in contributors:
+                            self.players[user]['stk_size'] += share
+                            self.pot_total -= share
+                else:  
+                    if any(winner in contributors for winner in winner_list):
+                        winner_list = self._find_intersection(winner_list, contributors)
+                        quotient, remainder = divmod(pot_size, len(winner_list))
+                        for winner in winner_list:
+                            self.players[winner]['stk_size'] += quotient
+                            self.pot_total -= quotient
+                        if remainder:
+                            for user in _start_order(street_name):
+                                if user in winner_list:
+                                    self.players[user]['stk_size'] += remainder
+                                    self.pot_total -= remainder
+                                    break
+                    else:
+                        share = pot_size // len(contributors)
+                        for user in contributors:
+                            self.players[user]['stk_size'] += share
+                            self.pot_total -= share
+
+        if not self.pot_total == 0:
+            print(self.pot_total)
+        assert self.pot_total == 0
+
+    def _pot_award_2(self, nuts : dict, street_name : str) -> None:
+        # 기여도 비율 논리 (패자에게 남은 팟 분배시 차순위 카드랭크대로 분배. 카드랭크 무승부시 기여도 비율로 분배)
+        def _start_order(street_name):
+            if street_name == 'pre_flop':
+                if self.rings == 6:
+                    start_order =["UTG", "HJ", "CO", "D", "SB", "BB"]             
+                elif self.rings == 9:
+                    start_order = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
+            else:
+                if self.rings == 6:
+                    start_order = ["SB", "BB", "UTG", "HJ", "CO", "D"]            
+                elif self.rings == 9:
+                    start_order = ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D']     
+
+            return start_order
+        
+        winner_list = [winner for winner in nuts.keys()]
+        street_list = ["pre_flop", "flop", "turn", "river"]
+        idx = street_list.index(street_name)
+
+        for street in street_list[:idx+1]:
+            users_ranking = self.log_users_ranking.copy()
+            users_ranking.popleft()
+            # 해당 스트리트에 형성된 팟이 있으면
+            if self.side_pots[street].get('contribution_total', {}):
+                # 그팟의 사이즈와 팟의 기여자들에 대해서
+                pot_size = self.side_pots[street]['contribution_total']
+                contributors = [position for position, contribution in self.side_pots[street]['users_pot_contributions'].items() if contribution >= 0]
+                
+                if len(winner_list) == 1:
+                    winner = winner_list[0]
+
+                    # 해당 스트릿의 팟에 승자가 기여했으면
+                    if winner in contributors:
+                        # 단독승리시 지분을 승자에게 배분하고
+                        self.players[winner]['stk_size'] += self.side_pots[street]['stake_for_all'][winner]
+                        self.pot_total -= self.side_pots[street]['stake_for_all'][winner]
+                        pot_size -= self.side_pots[street]['stake_for_all'][winner]
+
+                        # 배분후 해당 스트릿의 팟이 남으면, 차순위 랭커들에게 남은 팟을 분배한다.
+                        if pot_size:
+                            while users_ranking:
+                                next_rankers_contribution_dict = {} 
+                                # 차순위 랭커들이 무승부면  
+                                if isinstance(users_ranking[0], tuple):
+                                    for user in users_ranking[0]:
+                                        # 무승부인 차순위 랭커들이 해당 팟에 기여했을 때, 랭커와 기여도를 따로 딕셔너리에 담고 총합을 구해놓은 뒤
+                                        if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                            next_rankers_contribution_dict[user] = self.side_pots[street]['users_pot_contributions'][user]
+                                    if next_rankers_contribution_dict:
+                                        total = sum(next_rankers_contribution_dict.values())
+                                        # 랭커들의 총 기여분이 남은 팟보다 크면
+                                        if pot_size < total:
+                                            share_list = []
+                                            # 랭커들이 팟에 기여한 비율로 남은 팟을 랭커들에게 배분하고
+                                            pot_size_before_distribution = pot_size
+                                            for next_ranker, contribution in next_rankers_contribution_dict.items():
+                                                share = (contribution * pot_size_before_distribution) // total
+                                                share_list.append(share)
+                                                self.players[next_ranker]['stk_size'] += share
+                                                self.pot_total -= share
+                                                pot_size -= share
+                                            remainder = pot_size_before_distribution - sum(share_list)
+                                            if remainder:
+                                                for user in _start_order(street_name):
+                                                    if user in next_rankers_contribution_dict.keys():
+                                                        self.players[user]['stk_size'] += remainder
+                                                        self.pot_total -= remainder
+                                                        pot_size -= remainder
+                                                        break
+                                            users_ranking.popleft()
+                                                            
+                                        # 랭커들의 총 기여분이 남은 팟과 같거나, 남은 팟보다 작으면
+                                        else:
+                                            for user in  next_rankers_contribution_dict.keys():
+                                                # 랭커들이 팟에 기여했을 때, 자신이 기여한 만큼 돌려 받는다
+                                                if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                                    self.players[user]['stk_size'] += self.side_pots[street]['users_pot_contributions'][user]
+                                                    self.pot_total -= self.side_pots[street]['users_pot_contributions'][user]
+                                                    pot_size -= self.side_pots[street]['users_pot_contributions'][user]
+                                            users_ranking.popleft()
+                                    else:
+                                        users_ranking.popleft()
+                                # 차순위가 한명이면
+                                else:
+                                    # 차순위 랭커가 해당 팟에 기여했을 때
+                                    if self.side_pots[street]['users_pot_contributions'].get(users_ranking[0], {}):
+                                        next_rankers_contribution_dict[users_ranking[0]] = self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                        # 랭커의 기여도가 남은 팟과 같거나, 남은 팟보다 작으면
+                                        if pot_size >= next_rankers_contribution_dict[users_ranking[0]]:
+                                            # 기여도 만큼 돌려 받고
+                                            self.players[users_ranking[0]]['stk_size'] += next_rankers_contribution_dict[users_ranking[0]]
+                                            self.pot_total -= next_rankers_contribution_dict[users_ranking[0]]
+                                            pot_size -= next_rankers_contribution_dict[users_ranking[0]]
+                                            users_ranking.popleft()
+                                        # 랭커의 기여도가 남은 팟보다 크면
+                                        else:
+                                            # 남은 팟 전부를 랭커에게 돌려준다.
+                                            self.players[users_ranking[0]]['stk_size'] += pot_size
+                                            self.pot_total -= pot_size
+                                            pot_size = 0
+                                            users_ranking.popleft()
+                                    else:
+                                        users_ranking.popleft()
+                        
+                    # 해당 스트릿의 팟에 승자가 기여하지 않았으면
+                    else:
+                        # 차순위 랭커들에게 남은 팟을 배분한다
+                        if pot_size:
+                            while users_ranking:
+                                next_rankers_contribution_dict = {} 
+                                # 차순위 랭커들이 무승부면  
+                                if isinstance(users_ranking[0], tuple):
+                                    for user in users_ranking[0]:
+                                        # 무승부인 차순위 랭커들이 해당 팟에 기여했을 때, 랭커와 기여도를 따로 딕셔너리에 담고 총합을 구해놓은 뒤
+                                        if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                            next_rankers_contribution_dict[user] = self.side_pots[street]['users_pot_contributions'][user]
+                                    if next_rankers_contribution_dict:
+                                        total = sum(next_rankers_contribution_dict.values())
+                                        # 랭커들의 총 기여분이 남은 팟보다 크면
+                                        if pot_size < total:
+                                            share_list = []
+                                            # 랭커들이 팟에 기여한 비율로 남은 팟을 랭커들에게 배분하고
+                                            pot_size_before_distribution = pot_size
+                                            for next_ranker, contribution in next_rankers_contribution_dict.items():
+                                                share = (contribution * pot_size_before_distribution) // total
+                                                share_list.append(share)
+                                                self.players[next_ranker]['stk_size'] += share
+                                                self.pot_total -= share
+                                                pot_size -= share
+                                            remainder = pot_size_before_distribution - sum(share_list)
+                                            if remainder:
+                                                for user in _start_order(street_name):
+                                                    if user in next_rankers_contribution_dict.keys():
+                                                        self.players[user]['stk_size'] += remainder
+                                                        self.pot_total -= remainder
+                                                        pot_size -= remainder
+                                                        break
+                                            users_ranking.popleft()
+                                                            
+                                        # 랭커들의 총 기여분이 남은 팟과 같거나, 남은 팟보다 작으면
+                                        else:
+                                            for user in  next_rankers_contribution_dict.keys():
+                                                # 랭커들이 팟에 기여했을 때, 자신이 기여한 만큼 돌려 받는다
+                                                if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                                    self.players[user]['stk_size'] += self.side_pots[street]['users_pot_contributions'][user]
+                                                    self.pot_total -= self.side_pots[street]['users_pot_contributions'][user]
+                                                    pot_size -= self.side_pots[street]['users_pot_contributions'][user]
+                                            users_ranking.popleft()
+                                    else:
+                                        users_ranking.popleft()
+                                # 차순위가 한명이면
+                                else:
+                                    # 차순위 랭커가 해당 팟에 기여했을 때
+                                    if self.side_pots[street]['users_pot_contributions'].get(users_ranking[0], {}):
+                                        next_rankers_contribution_dict[users_ranking[0]] = self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                        # 랭커의 기여도가 남은 팟과 같거나, 남은 팟보다 작으면
+                                        if pot_size >= next_rankers_contribution_dict[users_ranking[0]]:
+                                            # 기여도 만큼 돌려 받고
+                                            self.players[users_ranking[0]]['stk_size'] += next_rankers_contribution_dict[users_ranking[0]]
+                                            self.pot_total -= next_rankers_contribution_dict[users_ranking[0]]
+                                            pot_size -= next_rankers_contribution_dict[users_ranking[0]]
+                                            users_ranking.popleft()
+                                        # 랭커의 기여도가 남은 팟보다 크면
+                                        else:
+                                            # 남은 팟 전부를 랭커에게 돌려준다.
+                                            self.players[users_ranking[0]]['stk_size'] += pot_size
+                                            self.pot_total -= pot_size
+                                            pot_size = 0
+                                            users_ranking.popleft()
+                                    else:
+                                        users_ranking.popleft()
+ 
+                # 무승부시
+                else:
+                    # 해당 스트릿의 팟에 기여한 무승부인원들이 있으면
+                    if any(winner in contributors for winner in winner_list):
+                        winner_list = self._find_intersection(winner_list, contributors)
+                        stake_total = sum(self.side_pots[street]['stake_for_all'][winner] for winner in winner_list)
+                        winner_contribution_dict = {}
+                        for winner in winner_list:
+                            winner_contribution_dict[winner] = self.side_pots[street]['users_pot_contributions'][winner]
+                        # 무승부 인원들의 stake for all 의 총합이 팟 사이즈보다 크면 기여도의 비율대로 배분하고
+                        if stake_total > pot_size:
+                            total = sum(winner_contribution_dict.values())
+                            share_list = []
+                            pot_size_before_distribution = pot_size
+                            for winner, contribution in winner_contribution_dict.items():
+                                share = (contribution * pot_size_before_distribution) // total
+                                share_list.append(share)
+                                self.players[winner]['stk_size'] += share
+                                self.pot_total -= share
+                                pot_size -= share                           
+                            remainder = pot_size_before_distribution - sum(share_list)
+                            if remainder:
+                                for user in _start_order(street_name):
+                                    if user in winner_list:
+                                        self.players[user]['stk_size'] += remainder
+                                        self.pot_total -= remainder
+                                        pot_size -= remainder
+                                        break
+                        # 아니면 각자의 stake for all을 배분한다.
+                        else:
+                            for winner in winner_list:
+                                self.players[winner]['stk_size'] += self.side_pots[street]['stake_for_all'][winner]
+                                self.pot_total -= self.side_pots[street]['stake_for_all'][winner]
+                                pot_size -= self.side_pots[street]['stake_for_all'][winner]
+
+                            # 분배후 팟이 남아 있으면                        
+                            if pot_size:                 
+                                # 차순위 랭커들에게 남음 팟을 배분한다.
+                                while users_ranking:
+                                    next_rankers_contribution_dict = {} 
+                                    # 차순위 랭커들이 무승부면  
+                                    if isinstance(users_ranking[0], tuple):
+                                        for user in users_ranking[0]:
+                                            # 무승부인 차순위 랭커들이 해당 팟에 기여했을 때, 랭커와 기여도를 따로 딕셔너리에 담고 총합을 구해놓은 뒤
+                                            if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                                next_rankers_contribution_dict[user] = self.side_pots[street]['users_pot_contributions'][user]
+                                        if next_rankers_contribution_dict:
+                                            total = sum(next_rankers_contribution_dict.values())
+                                            # 랭커들의 총 기여분이 남은 팟보다 크면
+                                            if pot_size < total:
+                                                share_list = []
+                                                # 랭커들이 팟에 기여한 비율로 남은 팟을 랭커들에게 배분하고
+                                                pot_size_before_distribution = pot_size
+                                                for next_ranker, contribution in next_rankers_contribution_dict.items():
+                                                    share = (contribution * pot_size_before_distribution) // total
+                                                    share_list.append(share)
+                                                    self.players[next_ranker]['stk_size'] += share
+                                                    self.pot_total -= share
+                                                    pot_size -= share
+                                                remainder = pot_size_before_distribution - sum(share_list)
+                                                if remainder:
+                                                    for user in _start_order(street_name):
+                                                        if user in next_rankers_contribution_dict.keys():
+                                                            self.players[user]['stk_size'] += remainder
+                                                            self.pot_total -= remainder
+                                                            pot_size -= remainder
+                                                            break
+                                                users_ranking.popleft()
+                                                                
+                                            # 랭커들의 총 기여분이 남은 팟과 같거나, 남은 팟보다 작으면
+                                            else:
+                                                for user in  next_rankers_contribution_dict.keys():
+                                                    # 랭커들이 팟에 기여했을 때, 자신이 기여한 만큼 돌려 받는다
+                                                    if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                                        self.players[user]['stk_size'] += self.side_pots[street]['users_pot_contributions'][user]
+                                                        self.pot_total -= self.side_pots[street]['users_pot_contributions'][user]
+                                                        pot_size -= self.side_pots[street]['users_pot_contributions'][user]
+                                                users_ranking.popleft()
+                                        else:
+                                            users_ranking.popleft()                            
+                                    # 차순위가 한명이면
+                                    else:
+                                        # 차순위 랭커가 해당 팟에 기여했을 때
+                                        if self.side_pots[street]['users_pot_contributions'].get(users_ranking[0], {}):
+                                            next_rankers_contribution_dict[users_ranking[0]] = self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                            # 랭커의 기여도가 남은 팟과 같거나, 남은 팟보다 작으면
+                                            if pot_size >= next_rankers_contribution_dict[users_ranking[0]]:
+                                                # 기여도 만큼 돌려 받고
+                                                self.players[users_ranking[0]]['stk_size'] += next_rankers_contribution_dict[users_ranking[0]]
+                                                self.pot_total -= next_rankers_contribution_dict[users_ranking[0]]
+                                                pot_size -= next_rankers_contribution_dict[users_ranking[0]]
+                                                users_ranking.popleft()
+                                            # 랭커의 기여도가 남은 팟보다 크면
+                                            else:
+                                                # 남은 팟 전부를 랭커에게 돌려준다.
+                                                self.players[users_ranking[0]]['stk_size'] += pot_size
+                                                self.pot_total -= pot_size
+                                                pot_size = 0
+                                                users_ranking.popleft()
+                                        else:
+                                            users_ranking.popleft()
+                    # 해당 스트릿의 팟에 승자가 기여하지 않았으면
+                    else:
+                        # 차순위 랭커들에게 남은 팟을 배분한다
+                        if pot_size:
+                            while users_ranking:
+                                next_rankers_contribution_dict = {} 
+                                # 차순위 랭커들이 무승부면  
+                                if isinstance(users_ranking[0], tuple):
+                                    for user in users_ranking[0]:
+                                        # 무승부인 차순위 랭커들이 해당 팟에 기여했을 때, 랭커와 기여도를 따로 딕셔너리에 담고 총합을 구해놓은 뒤
+                                        if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                            next_rankers_contribution_dict[user] = self.side_pots[street]['users_pot_contributions'][user]
+                                    if next_rankers_contribution_dict:
+                                        total = sum(next_rankers_contribution_dict.values())
+                                        # 랭커들의 총 기여분이 남은 팟보다 크면
+                                        if pot_size < total:
+                                            share_list = []
+                                            # 랭커들이 팟에 기여한 비율로 남은 팟을 랭커들에게 배분하고
+                                            pot_size_before_distribution = pot_size
+                                            for next_ranker, contribution in next_rankers_contribution_dict.items():
+                                                share = (contribution * pot_size_before_distribution) // total
+                                                share_list.append(share)
+                                                self.players[next_ranker]['stk_size'] += share
+                                                self.pot_total -= share
+                                                pot_size -= share
+                                            remainder = pot_size_before_distribution - sum(share_list)
+                                            if remainder:
+                                                for user in _start_order(street_name):
+                                                    if user in next_rankers_contribution_dict.keys():
+                                                        self.players[user]['stk_size'] += remainder
+                                                        self.pot_total -= remainder
+                                                        pot_size -= remainder
+                                                        break
+                                            users_ranking.popleft()
+                                                            
+                                        # 랭커들의 총 기여분이 남은 팟과 같거나, 남은 팟보다 작으면
+                                        else:
+                                            for user in  next_rankers_contribution_dict.keys():
+                                                # 랭커들이 팟에 기여했을 때, 자신이 기여한 만큼 돌려 받는다
+                                                if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                                    self.players[user]['stk_size'] += self.side_pots[street]['users_pot_contributions'][user]
+                                                    self.pot_total -= self.side_pots[street]['users_pot_contributions'][user]
+                                                    pot_size -= self.side_pots[street]['users_pot_contributions'][user]
+                                            users_ranking.popleft()
+                                    else:
+                                        users_ranking.popleft()
+                                # 차순위가 한명이면
+                                else:
+                                    # 차순위 랭커가 해당 팟에 기여했을 때
+                                    if self.side_pots[street]['users_pot_contributions'].get(users_ranking[0], {}):
+                                        next_rankers_contribution_dict[users_ranking[0]] = self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                        # 랭커의 기여도가 남은 팟과 같거나, 남은 팟보다 작으면
+                                        if pot_size >= next_rankers_contribution_dict[users_ranking[0]]:
+                                            # 기여도 만큼 돌려 받고
+                                            self.players[users_ranking[0]]['stk_size'] += next_rankers_contribution_dict[users_ranking[0]]
+                                            self.pot_total -= next_rankers_contribution_dict[users_ranking[0]]
+                                            pot_size -= next_rankers_contribution_dict[users_ranking[0]]
+                                            users_ranking.popleft()
+                                        # 랭커의 기여도가 남은 팟보다 크면
+                                        else:
+                                            # 남은 팟 전부를 랭커에게 돌려준다.
+                                            self.players[users_ranking[0]]['stk_size'] += pot_size
+                                            self.pot_total -= pot_size
+                                            pot_size = 0
+                                            users_ranking.popleft()
+                                    else:
+                                        users_ranking.popleft()
+        assert self.pot_total == 0
+
+    def _pot_award_3(self, nuts : dict, street_name : str) -> None:
+        # 기여도 유무 논리 (메인팟, 사이드팟으로 승자의 팟 분배) + 기여도 비율 논리 (패자에게 남은 팟 분배시 차순위 카드랭크대로 분배. 카드랭크 무승부시 기여도 비율로 분배)
+        def _start_order(street_name):
+            if street_name == 'pre_flop':
+                if self.rings == 6:
+                    start_order =["UTG", "HJ", "CO", "D", "SB", "BB"]             
+                elif self.rings == 9:
+                    start_order = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
+            else:
+                if self.rings == 6:
+                    start_order = ["SB", "BB", "UTG", "HJ", "CO", "D"]            
+                elif self.rings == 9:
+                    start_order = ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D']     
+
+            return start_order
+        
+        winner_list = [winner for winner in nuts.keys()]
+        street_list = ["pre_flop", "flop", "turn", "river"]
+        idx = street_list.index(street_name)
+
+        if len(winner_list) == 1:
+            winner = winner_list[0]
+            for street in street_list[:idx+1]:
+                users_ranking = self.log_users_ranking.copy()
+                users_ranking.popleft()
+
+                # 해당 스트리트에 형성된 팟이 있으면
+                if self.side_pots[street].get('contribution_total', {}):
+                    # 그팟의 사이즈와 팟의 기여자들에 대해서
+                    pot_size = self.side_pots[street]['contribution_total']
+                    contributors = [position for position, contribution in self.side_pots[street]['users_pot_contributions'].items() if contribution >= 0]
+                    
+                    # 해당 스트릿의 팟에 승자가 기여했으면
+                    if winner in contributors:
+                        # 단독승리시 지분을 승자에게 배분하고
+                        self.players[winner]['stk_size'] += self.side_pots[street]['stake_for_all'][winner]
+                        self.pot_total -= self.side_pots[street]['stake_for_all'][winner]
+                        pot_size -= self.side_pots[street]['stake_for_all'][winner]
+
+                        # 배분후 해당 스트릿의 팟이 남으면, 차순위 랭커들에게 남은 팟을 분배한다.
+                        if pot_size:
+                            while users_ranking:
+                                next_rankers_contribution_dict = {} 
+                                # 차순위 랭커들이 무승부면  
+                                if isinstance(users_ranking[0], tuple):
+                                    for user in users_ranking[0]:
+                                        # 무승부인 차순위 랭커들이 해당 팟에 기여했을 때, 랭커와 기여도를 따로 딕셔너리에 담고 총합을 구해놓은 뒤
+                                        if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                            next_rankers_contribution_dict[user] = self.side_pots[street]['users_pot_contributions'][user]
+                                    if next_rankers_contribution_dict:
+                                        total = sum(next_rankers_contribution_dict.values())
+                                        # 랭커들의 총 기여분이 남은 팟보다 크면
+                                        if pot_size < total:
+                                            share_list = []
+                                            # 랭커들이 팟에 기여한 비율로 남은 팟을 랭커들에게 배분하고
+                                            pot_size_before_distribution = pot_size
+                                            for next_ranker, contribution in next_rankers_contribution_dict.items():
+                                                share = (contribution * pot_size_before_distribution) // total
+                                                share_list.append(share)
+                                                self.players[next_ranker]['stk_size'] += share
+                                                x = self.players[next_ranker]['stk_size']
+                                                self.pot_total -= share
+                                                pot_size -= share
+                                            remainder = pot_size_before_distribution - sum(share_list)
+                                            if remainder:
+                                                for user in _start_order(street_name):
+                                                    if user in next_rankers_contribution_dict.keys():
+                                                        self.players[user]['stk_size'] += remainder
+                                                        self.pot_total -= remainder
+                                                        pot_size -= remainder
+                                                        break
+                                            users_ranking.popleft()
+                                                            
+                                        # 랭커들의 총 기여분이 남은 팟과 같거나, 남은 팟보다 작으면
+                                        else:
+                                            for user in  next_rankers_contribution_dict.keys():
+                                                # 랭커들이 팟에 기여했을 때, 자신이 기여한 만큼 돌려 받는다
+                                                if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                                    self.players[user]['stk_size'] += self.side_pots[street]['users_pot_contributions'][user]
+                                                    self.pot_total -= self.side_pots[street]['users_pot_contributions'][user]
+                                                    pot_size -= self.side_pots[street]['users_pot_contributions'][user]
+                                            users_ranking.popleft()
+                                    else:
+                                        users_ranking.popleft()
+                                # 차순위가 한명이면
+                                else:
+                                    # 차순위 랭커가 해당 팟에 기여했을 때
+                                    if self.side_pots[street]['users_pot_contributions'].get(users_ranking[0], {}):
+                                        next_rankers_contribution_dict[users_ranking[0]] = self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                        # 랭커의 기여도가 남은 팟과 같거나, 남은 팟보다 작으면
+                                        if pot_size >= next_rankers_contribution_dict[users_ranking[0]]:
+                                            # 기여도 만큼 돌려 받고
+                                            self.players[users_ranking[0]]['stk_size'] += next_rankers_contribution_dict[users_ranking[0]]
+                                            self.pot_total -= next_rankers_contribution_dict[users_ranking[0]]
+                                            pot_size -= next_rankers_contribution_dict[users_ranking[0]]
+                                            users_ranking.popleft()
+                                        # 랭커의 기여도가 남은 팟보다 크면
+                                        else:
+                                            # 남은 팟 전부를 랭커에게 돌려준다.
+                                            self.players[users_ranking[0]]['stk_size'] += pot_size
+                                            self.pot_total -= pot_size
+                                            pot_size = 0
+                                            users_ranking.popleft()
+                                    else:
+                                        users_ranking.popleft()
+                        
+                    # 해당 스트릿의 팟에 승자가 기여하지 않았으면
+                    else:
+                        # 차순위 랭커들에게 남은 팟을 배분한다
+                        if pot_size:
+                            while users_ranking:
+                                next_rankers_contribution_dict = {} 
+                                # 차순위 랭커들이 무승부면  
+                                if isinstance(users_ranking[0], tuple):
+                                    for user in users_ranking[0]:
+                                        # 무승부인 차순위 랭커들이 해당 팟에 기여했을 때, 랭커와 기여도를 따로 딕셔너리에 담고 총합을 구해놓은 뒤
+                                        if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                            next_rankers_contribution_dict[user] = self.side_pots[street]['users_pot_contributions'][user]
+                                    if next_rankers_contribution_dict:
+                                        total = sum(next_rankers_contribution_dict.values())
+                                        # 랭커들의 총 기여분이 남은 팟보다 크면
+                                        if pot_size < total:
+                                            share_list = []
+                                            # 랭커들이 팟에 기여한 비율로 남은 팟을 랭커들에게 배분하고
+                                            pot_size_before_distribution = pot_size
+                                            for next_ranker, contribution in next_rankers_contribution_dict.items():
+                                                share = (contribution * pot_size_before_distribution) // total
+                                                share_list.append(share)
+                                                self.players[next_ranker]['stk_size'] += share
+                                                self.pot_total -= share
+                                                pot_size -= share
+                                            remainder = pot_size_before_distribution - sum(share_list)
+                                            if remainder:
+                                                for user in _start_order(street_name):
+                                                    if user in next_rankers_contribution_dict.keys():
+                                                        self.players[user]['stk_size'] += remainder
+                                                        self.pot_total -= remainder
+                                                        pot_size -= remainder
+                                                        break
+                                            users_ranking.popleft()
+                                                            
+                                        # 랭커들의 총 기여분이 남은 팟과 같거나, 남은 팟보다 작으면
+                                        else:
+                                            for user in  next_rankers_contribution_dict.keys():
+                                                # 랭커들이 팟에 기여했을 때, 자신이 기여한 만큼 돌려 받는다
+                                                if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                                    self.players[user]['stk_size'] += self.side_pots[street]['users_pot_contributions'][user]
+                                                    self.pot_total -= self.side_pots[street]['users_pot_contributions'][user]
+                                                    pot_size -= self.side_pots[street]['users_pot_contributions'][user]
+                                            users_ranking.popleft()
+                                    else:
+                                        users_ranking.popleft()
+                                # 차순위가 한명이면
+                                else:
+                                    # 차순위 랭커가 해당 팟에 기여했을 때
+                                    if self.side_pots[street]['users_pot_contributions'].get(users_ranking[0], {}):
+                                        next_rankers_contribution_dict[users_ranking[0]] = self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                        # 랭커의 기여도가 남은 팟과 같거나, 남은 팟보다 작으면
+                                        if pot_size >= next_rankers_contribution_dict[users_ranking[0]]:
+                                            # 기여도 만큼 돌려 받고
+                                            self.players[users_ranking[0]]['stk_size'] += next_rankers_contribution_dict[users_ranking[0]]
+                                            self.pot_total -= next_rankers_contribution_dict[users_ranking[0]]
+                                            pot_size -= next_rankers_contribution_dict[users_ranking[0]]
+                                            users_ranking.popleft()
+                                        # 랭커의 기여도가 남은 팟보다 크면
+                                        else:
+                                            # 남은 팟 전부를 랭커에게 돌려준다.
+                                            self.players[users_ranking[0]]['stk_size'] += pot_size
+                                            self.pot_total -= pot_size
+                                            pot_size = 0
+                                            users_ranking.popleft()
+                                    else:
+                                        users_ranking.popleft()
+ 
+        # 무승부시
+        else:
+            # 메인 팟과 사이드 팟을 무승부 인원들에게 분배하고
+            for street in street_list:
+                pots = self.side_pots[street].get('pots', {})    
+                for _ , pot in pots.items():
+                    pot_size = pot['size']
+                    contributors = pot['contributors']
+                    
+                    if any(winner in contributors for winner in winner_list):
+                        winner_list = self._find_intersection(winner_list, contributors)
+                        quotient, remainder = divmod(pot_size, len(winner_list))
+                        for winner in winner_list:
+                            self.players[winner]['stk_size'] += quotient
+                            self.side_pots[street]['contribution_total'] -= quotient
+                            self.pot_total -= quotient
+                        if remainder:
+                            for user in _start_order(street_name):
+                                if user in winner_list:
+                                    self.players[user]['stk_size'] += remainder
+                                    self.pot_total -= remainder
+                                    self.side_pots[street]['contribution_total'] -= remainder
+                                    break
+            # 분배후 팟이 남아 있으면                        
+            if self.pot_total:                 
+                for street in street_list[:idx+1]:
+                    users_ranking = self.log_users_ranking.copy()
+                    users_ranking.popleft()
+
+                    # 해당 스트리트에 팟이 남아 있으면
+                    if self.side_pots[street].get('contribution_total', {}):
+                        # 그팟의 사이즈와 팟의 기여자들에 대해서
+                        pot_size = self.side_pots[street]['contribution_total']
+                        contributors = [position for position, contribution in self.side_pots[street]['users_pot_contributions'].items() if contribution >= 0]            
+
+                        # 차순위 랭커들에게 남음 팟을 배분한다.
+                        while users_ranking:
+                            next_rankers_contribution_dict = {} 
+                            # 차순위 랭커들이 무승부면  
+                            if isinstance(users_ranking[0], tuple):
+                                for user in users_ranking[0]:
+                                    # 무승부인 차순위 랭커들이 해당 팟에 기여했을 때, 랭커와 기여도를 따로 딕셔너리에 담고 총합을 구해놓은 뒤
+                                    if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                        next_rankers_contribution_dict[user] = self.side_pots[street]['users_pot_contributions'][user]
+                                if next_rankers_contribution_dict:
+                                    total = sum(next_rankers_contribution_dict.values())
+                                    # 랭커들의 총 기여분이 남은 팟보다 크면
+                                    if pot_size < total:
+                                        share_list = []
+                                        # 랭커들이 팟에 기여한 비율로 남은 팟을 랭커들에게 배분하고
+                                        pot_size_before_distribution = pot_size
+                                        for next_ranker, contribution in next_rankers_contribution_dict.items():
+                                            share = (contribution * pot_size_before_distribution) // total
+                                            share_list.append(share)
+                                            self.players[next_ranker]['stk_size'] += share
+                                            self.pot_total -= share
+                                            pot_size -= share
+                                        remainder = pot_size_before_distribution - sum(share_list)
+                                        if remainder:
+                                            for user in _start_order(street_name):
+                                                if user in next_rankers_contribution_dict.keys():
+                                                    self.players[user]['stk_size'] += remainder
+                                                    self.pot_total -= remainder
+                                                    pot_size -= remainder
+                                                    break
+                                        users_ranking.popleft()
+                                                        
+                                    # 랭커들의 총 기여분이 남은 팟과 같거나, 남은 팟보다 작으면
+                                    else:
+                                        for user in  next_rankers_contribution_dict.keys():
+                                            # 랭커들이 팟에 기여했을 때, 자신이 기여한 만큼 돌려 받는다
+                                            if self.side_pots[street]['users_pot_contributions'].get(user, {}):
+                                                self.players[user]['stk_size'] += self.side_pots[street]['users_pot_contributions'][user]
+                                                self.pot_total -= self.side_pots[street]['users_pot_contributions'][user]
+                                                pot_size -= self.side_pots[street]['users_pot_contributions'][user]
+                                        users_ranking.popleft()
+                                else:
+                                    users_ranking.popleft()                            
+                            # 차순위가 한명이면
+                            else:
+                                # 차순위 랭커가 해당 팟에 기여했을 때
+                                if self.side_pots[street]['users_pot_contributions'].get(users_ranking[0], {}):
+                                    next_rankers_contribution_dict[users_ranking[0]] = self.side_pots[street]['users_pot_contributions'][users_ranking[0]]
+                                    # 랭커의 기여도가 남은 팟과 같거나, 남은 팟보다 작으면
+                                    if pot_size >= next_rankers_contribution_dict[users_ranking[0]]:
+                                        # 기여도 만큼 돌려 받고
+                                        self.players[users_ranking[0]]['stk_size'] += next_rankers_contribution_dict[users_ranking[0]]
+                                        self.pot_total -= next_rankers_contribution_dict[users_ranking[0]]
+                                        pot_size -= next_rankers_contribution_dict[users_ranking[0]]
+                                        users_ranking.popleft()
+                                    # 랭커의 기여도가 남은 팟보다 크면
+                                    else:
+                                        # 남은 팟 전부를 랭커에게 돌려준다.
+                                        self.players[users_ranking[0]]['stk_size'] += pot_size
+                                        self.pot_total -= pot_size
+                                        pot_size = 0
+                                        users_ranking.popleft()
+                                else:
+                                    users_ranking.popleft()
+
+        assert self.pot_total == 0
     ####################################################################################################################################################
     ####################################################################################################################################################
     #                                                                  AUXILIARY ETC                                                                   #
@@ -948,6 +1624,7 @@ class Base:
 
         on_user_list : 서버에서 전달 받은 현재 접속 중인 클라이언트들의 유저 아이디 리스트
         '''
+        # 만약 게임 도중에 접속이 끊긴 경우 해당유저는 폴드처리를 해야할 뿐만 아니라 start_order 에서도 제외 시켜야 한다. 그렇지 않으면 게임 종료되지 않을 수 있음
         connected_users = []
         if on_user_list:
             for on_user in on_user_list:
