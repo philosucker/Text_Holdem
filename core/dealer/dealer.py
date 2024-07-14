@@ -379,7 +379,7 @@ class Dealer(Base):
              # 테스트 코드
             self.test_code_showdown_info()
 
-            self._pot_award(nuts, street_name, 2)
+            self._pot_award(nuts, street_name, 1)
             
             # 테스트 코드
             self.test_code_pot_award_info(stk_size)
