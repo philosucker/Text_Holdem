@@ -98,6 +98,8 @@ I made reference for you : [Implementation Rules/rule.md](https://github.com/phi
 - Completed implementation of "side pot" creation and management algorithm  
 - Completed implementation of  "pot award" algorithm  
 
+07.16.2024  
+- Started learning socket programming  
 
 ## Directory Structure  
 
