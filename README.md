@@ -61,54 +61,54 @@
 ## Development Log
   
 04.24.2024   
-    - Started learning the rules of Texas Holdem. 
+- Started learning the rules of Texas Holdem. 
     
 05.14.2024   
-    - Started studying FastAPI for backend development  
+- Started studying FastAPI for backend development  
 
 06.04.2024  
-    - Fully mastered the rules of Texas Holdem.  
+- Fully mastered the rules of Texas Holdem.  
    
 06.08.2024  
-    - Started Designing the game architecture.   
-    - Conceptualized the core logic for the Holdem game application.   
+- Started Designing the game architecture.   
+- Conceptualized the core logic for the Holdem game application.   
      
 06.10.2024  
-    - Started learning Unity.  
+- Started learning Unity.  
   
 06.19.2024  
-    - Completed Monolithic Architecture design  
-      Planned to upgrade to Micro Service Architecture after development of texas holdem dealer algorithm.  
+- Completed Monolithic Architecture design  
+- Planned to upgrade to Micro Service Architecture after development of texas holdem dealer algorithm.  
   <img src="https://github.com/philosucker/Text_Holdem/assets/65852355/9219939e-fff9-4f3f-885f-d25b718339c0" alt="홀덤-2" width="600" />
 
 06.24.2024
-    - Started development of texas holdem dealer algorithm.  
+- Started development of texas holdem dealer algorithm.  
 
 06.25.2024  
-    - Completed implementation of “bet”, “raise”, “all-in”, “call”, “check”, and “fold action” algorithms.
+- Completed implementation of “bet”, “raise”, “all-in”, “call”, “check”, and “fold action” algorithms.
 
 06.26.2024  
-    - Review “end condition” logic.  
+- Review “end condition” logic.  
 
 06.27.2024  
-    - Review “pot creation and management” logic.  
+- Review “pot creation and management” logic.  
 
 06.28.2024  
-    - Review “end condition” and “showdown” connection logic.  
+- Review “end condition” and “showdown” connection logic.  
 
 07.01.2024  
-    - Review of “showdown” and “pot award” connection logic.  
+- Review of “showdown” and “pot award” connection logic.  
 
 07.02.2024  
-    - Completed implementation of “Showdown” ranking comparison algorithm.  
+- Completed implementation of “Showdown” ranking comparison algorithm.  
 
 07.05.2024  
-    - Completed implementation of “end condition” algorithm.  
-    - Implement test case DB and test functions and start dealer logic testing.  
+- Completed implementation of “end condition” algorithm.  
+- Implement test case DB and test functions and start dealer logic testing.  
 
 07.10.2024    
-    - Completed implementation of "side pot" creation and management algorithm    
-    - Completed implementation of  "pot award" algorithm    
+- Completed implementation of "side pot" creation and management algorithm    
+- Completed implementation of  "pot award" algorithm    
 
 07.16.2024  
 - Started learning socket programming (WebSocket)  
