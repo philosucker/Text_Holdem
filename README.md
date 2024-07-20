@@ -50,8 +50,8 @@
 9. Deep Learning : LLM, DRL for AI Holdem Agent  
 10. DevOps : Docker, Kubernetes  
 
-#### "How to implement Texas Holdem game? It's so complicated;("  
-### I made reference for you:) [Implementation Rules/rule.md](https://github.com/philosucker/Text_Holdem/blob/main/Implementation%20Rules/rule.md)
+### "How to implement Texas Holdem game? It's so complicated;("  
+#### I made reference for you:) [Implementation Rules/rule.md](https://github.com/philosucker/Text_Holdem/blob/main/Implementation%20Rules/rule.md)
 ---
 ## Development Log
   
