@@ -14,7 +14,7 @@
      
           1) High Risk of Gambling Addiction: Often perceived as mere gambling.  
           2) High Entry Barrier: The rules are not easy to learn.  
-          3) Lack of Solo Play Options: Requires at least three players; there are no games yet that include AI players.
+          3) Lack of Solo Play Options: There are no holdem game applications yet that include plausible AI agents.
          
 2. Texas Holdem presents a valuable opportunity for development using Large Language Models (LLM) and Deep Reinforcement Learning (DRL).
     
