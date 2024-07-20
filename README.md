@@ -1,7 +1,7 @@
 # Texture_Holdem
 
 ## Description: 
-- An application that allows multiplayer play using an artificial intelligence agent
+- An application that allows multiplayer play using an artificial intelligence agent  
   while maintaining the realism of throwing and receiving chips in an actual hold'em game.  
 ---
 ### Project Objectives
