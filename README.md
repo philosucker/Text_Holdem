@@ -1,9 +1,8 @@
-# Text_Holdem
+# Texture_Holdem
 
-
-## : Description: A text-based application for playing Texas Holdem
-
-
+## Description: 
+- An application that allows multiplayer play using an artificial intelligence agent while maintaining the realistic feel of an actual hold'em game.  
+---
 ### Project Objectives
 1. Develop a Texas Holdem game application that supports multiplayer with online.  
 2. Train AI agents capable of playing Texas Holdem and integrate them into the application.
