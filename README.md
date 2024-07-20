@@ -29,11 +29,16 @@
 3) Integrate the fixed-probability and LLM models into the Holdem application to collect data for reinforcement learning.
 
 #### Requirement Skills
-1. Python : FastAPI, AsyncIO (for backend)  
-2. C# and Design : Unity 2022 (for smartphone application)    
-3. Networking (websocket etc.)  
-4. Pipelining for Deep Learning Model (supervised learning, reinforcement learning for AI Holdem Agent)  
-5. Docker (for distribution)  
+1. Domain Knowledge : No Limit Texas Holdem  
+2. Programming Language : Python, C#  
+3. Backend : FastAPI  
+4. Database : MySQL, MongoDB  
+5. Application : Unity  
+7. Network Programming : Nginx, HTTP, Web Socket, Message Broker  
+8. Asyncrnous Programming : AsyncIO  
+9. Deep Learning : LLM, DRL for AI Holdem Agent  
+10. Docker  
+11. Kubernetes  
 
 #### How to implement Texas Holdem game? It's so complicated.  
 I made reference for you : [Implementation Rules/rule.md](https://github.com/philosucker/Text_Holdem/blob/main/Implementation%20Rules/rule.md)
@@ -99,8 +104,13 @@ I made reference for you : [Implementation Rules/rule.md](https://github.com/phi
 - Completed implementation of  "pot award" algorithm  
 
 07.16.2024  
-- Started learning socket programming  
+- Started learning socket programming (WebSocket)
 
+07.18.2024  
+- Started learning message broker (Kafka)
+
+07.19.2024  
+- Started learning AsyncIO  
 ## Directory Structure  
 
     app
