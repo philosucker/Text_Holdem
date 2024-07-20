@@ -2,7 +2,7 @@
 
 ## Description: 
 - An application that allows multiplayer play using an artificial intelligence agent  
-  while maintaining the realism of throwing and receiving chips in an actual hold'em game.  
+    while maintaining the realism of throwing and receiving chips in an actual hold'em game.  
 ---
 ### Project Objectives
 1. Develop a Texas Holdem game application that supports multiplayer with online.  
@@ -16,7 +16,8 @@
           2) High Entry Barrier: The rules are not easy to learn.  
           3) Lack of Solo Play Options: There are no holdem game applications yet that include plausible AI agents.
          
-2. Texas Holdem presents a valuable opportunity for development using Large Language Models (LLM) and Deep Reinforcement Learning (DRL).
+2. Texas Holdem presents a valuable opportunity for development  
+     using Large Language Models (LLM) and Deep Reinforcement Learning (DRL).  
     
    - Texas Holdem is an **imperfect information game** with strategic simulation elements.  
    - Developing AI capable of making optimal decisions and bluffing with limited information requires  
