@@ -37,7 +37,7 @@
 7. Network Programming : Nginx, HTTP, Web Socket, Message Broker  
 8. Asyncrnous Programming : AsyncIO  
 9. Deep Learning : LLM, DRL for AI Holdem Agent  
-10. Docker  
+10. Docker
 11. Kubernetes  
 
 #### How to implement Texas Holdem game? It's so complicated.  
