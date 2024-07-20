@@ -1,7 +1,8 @@
 # Texture_Holdem
 
 ## Description: 
-- An application that allows multiplayer play using an artificial intelligence agent while maintaining the realistic feel of an actual hold'em game.  
+- An application that allows multiplayer play using an artificial intelligence agent
+  while maintaining the realism of throwing and receiving chips in an actual hold'em game.  
 ---
 ### Project Objectives
 1. Develop a Texas Holdem game application that supports multiplayer with online.  
@@ -26,8 +27,7 @@
    
           2) Professional "Go"(Turn-Based Strategy Game) player Lee Sedol
                has also become a Holdem player as of June 2024.  
-
-  
+---
 #### Project Plan
 1. **from June until August in 2024:**    
    - Develop a Texas Holdem Game Application: Create an application with a sleek and user-friendly UI.
@@ -51,7 +51,7 @@
 
 #### How to implement Texas Holdem game? It's so complicated.  
 I made reference for you : [Implementation Rules/rule.md](https://github.com/philosucker/Text_Holdem/blob/main/Implementation%20Rules/rule.md)
-
+---
 ## Development Log
   
 04.24.2024   
