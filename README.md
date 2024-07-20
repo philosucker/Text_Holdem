@@ -8,7 +8,7 @@
 1. Develop a Texas Holdem game application that supports multiplayer with online.  
 2. Train AI agents capable of playing Texas Holdem and integrate them into the application.
      
-#### Project Background
+### Project Background
 1. The project aims to provide more people with an accessible and enjoyable way to experience Texas Holdem.  
    - **Characteristics of Existing Holdem Applications.**
      
@@ -28,7 +28,7 @@
           2) Professional "Go"(Turn-Based Strategy Game) player Lee Sedol
                has also become a Holdem player as of June 2024.  
 ---
-#### Project Plan
+### Project Plan
 1. **from June until August in 2024:**    
    - Develop a Texas Holdem Game Application: Create an application with a sleek and user-friendly UI.
       
@@ -38,7 +38,7 @@
      1) Utilize LLM APIs to create an LLM model for playing Holdem.  
      2) Integrate the LLM model into the Holdem application to collect data for reinforcement learning.  
   
-#### Requirement Skills
+### Requirement Skills
 1. Domain Knowledge : No Limit Texas Holdem  
 2. Programming Language : Python, C#  
 3. Backend : FastAPI  
