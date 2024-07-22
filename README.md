@@ -126,44 +126,54 @@
      │ 
      ├── house  
      │     │   
-     │     ├── reception_manager (Implementing)  
-     │     │           │
-     │     │           ├── database
-     │     │           │
-     │     │           ├── routes
-     │     │           │     
-     │     │           ├── schemas      
-     │     │           │
-     │     │           ├── services
-     │     │           │     
-     │     │           └── utils
+     │     ├── reception(Implementing)  
+     │     │      │
+     │     │      ├── authentication
+     │     │      │
+     │     │      ├── database
+     │     │      │     
+     │     │      ├── routers     
+     │     │      │
+     │     │      ├── schemas
+     │     │      │
+     │     │      ├── services
+     │     │      │        
+     │     │      └── main.py
      │     │
      │     │
-     │     ├── floor_manager (Implementing)
-     │     │           │
-     │     │           ├──
-     │     │           │
-     │     │           ├──
-     │     │           │
-     │     │           ├──
-     │     │           │
-     │     │           └──              
+     │     ├── floor(Implementing)
+     │     │      │
+     │     │      ├──
+     │     │      │
+     │     │      ├──
+     │     │      │
+     │     │      ├──
+     │     │      │
+     │     │      └── main.py             
      │     │      
      │     │
-     │     ├── dealer_manager(Implementing)
-     │     │           │
-     │     │           └── core
+     │     ├── dealer(Implementing)
+     │     │      │
+     │     │      ├── core
+     │     │      │    ├── src.py
+     │     │      │    └── dealer.py
+     │     │      │    
+     │     │      │    
+     │     │      │
+     │     │      └── main.py     
      │     │     
      │     │ 
-     │     └── agent_manager
-     │                 │
-     │                 ├──
-     │                 │
-     │                 ├──
-     │                 │
-     │                 ├──  
-     │                 │
-     │                 └──   
+     │     └── agency
+     │            │
+     │            ├── database
+     │            │     
+     │            ├── routers     
+     │            │
+     │            ├── schemas
+     │            │
+     │            ├── services
+     │            │        
+     │            └── main.py 
      ├──client
      │     └──Unity (Implementing)
      │          
