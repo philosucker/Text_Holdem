@@ -1,0 +1,1188 @@
+책 챕터6 데이터베이스 연결
+
+몽고 DB 설치
+몽고 DB 설정
+
+pip install beanie
+pip install pydantic-settings
+
+SQL에서는 데이터가 테이블에 저장된다.
+	SQL 데이터베이스는 데이터를 구조화된 테이블 형식으로 저장합니다. 
+	테이블은 행과 열로 구성되며, 각 행은 데이터 레코드이고 각 열은 특정 속성을 나타냅니다.
+NoSQL 에서는 데이터 저장을 위해 문서를 사용한다.
+	 NoSQL 데이터베이스는 여러 가지 유형이 있는데, 그 중 하나는 문서 지향 데이터베이스입니다. 
+	 문서 지향 데이터베이스 (예: MongoDB)는 데이터를 문서 형식(JSON, BSON 등)으로 저장합니다. 
+	 그러나 NoSQL에는 키-값 저장소, 열 지향 데이터베이스, 그래프 데이터베이스 등 다른 유형도 있습니다.
+문서는 Pydantic 모델과 동일한 방식으로 beanie가 제공하는 Document 클래스를 사용해 정의되고
+데이터베이스 컬렉션에 저장된다.
+	Beanie는 MongoDB와 함께 사용하는 비동기 ODM(Object Document Mapper)입니다. 
+	Beanie에서 문서는 Pydantic 모델과 유사하게 정의됩니다. 
+	Beanie의 Document 클래스는 
+	Pydantic의 BaseModel을 확장하여 사용자가 MongoDB 컬렉션에 저장할 수 있는 문서를 정의할 수 있게 합니다.
+	
+	
+	
+절차
+
+1. 몽고DB 데이터베이스가 상주할 폴더 생성
+	mkdir -p /home/philosucker/fastapi/ch06/planner_mongoDB/store
+
+2.MongoDB 설정 파일 생성
+	nano /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.conf
+
+
+		설정 파일에서 ~ 기호는 홈 디렉토리를 나타내지만, 
+		많은 경우 설정 파일 내에서는 이를 인식하지 못합니다. 
+		대신 절대 경로를 사용하는 것이 좋습니다. 
+		따라서, ~ 대신 실제 절대 경로를 사용해야 합니다.
+
+		아래 내용을 설정 파일에 추가합니다:
+		
+		storage:
+		  dbPath: /home/philosucker/fastapi/ch06/planner_mongoDB/store
+
+		systemLog:
+		  destination: file
+		  path: /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.log
+		  logAppend: true
+
+		net:
+		  bindIp: 127.0.0.1
+		  port: 27017
+
+			storage.dbPath는 MongoDB 데이터 파일이 저장될 경로를 지정합니다.
+			systemLog.path는 MongoDB 로그 파일 경로를 지정합니다.
+			net.bindIp는 MongoDB 서버가 바인드할 IP 주소를 지정합니다.
+			net.port는 MongoDB 서버가 사용할 포트를 지정합니다.
+/home/philosucker/testapp/mongod.conf
+3. MongoDB를 시스템 서비스로 설정하여 부팅 시 자동으로 시작되도록 설정하는 것이 좋습니다.
+
+	1.1. 시스템 서비스 파일 생성
+	sudo nano /etc/systemd/system/mongodb.service 파일을 다음과 같이 설정합니다:
+
+	[Unit]
+	Description=MongoDB Database Service
+	After=network.target
+
+	[Service]
+	User=philosucker
+	ExecStart=/usr/bin/mongod --config /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.conf
+	Restart=always
+
+	[Install]
+	WantedBy=multi-user.target
+
+	1.2. 서비스 파일 권한 설정
+	서비스 파일의 권한을 설정합니다.
+	sudo chmod 644 /etc/systemd/system/mongodb.service
+
+	1.3. 시스템 서비스 리로드
+	새로 생성한 서비스 파일을 시스템에 인식시키기 위해 시스템 서비스를 리로드합니다.
+	sudo systemctl daemon-reload
+
+	1.4. MongoDB 서비스 시작
+	MongoDB 서비스를 시작합니다.
+	sudo systemctl start mongodb
+
+	1.5. 시스템 부팅 시 MongoDB 자동 시작 설정
+	시스템 부팅 시 자동으로 MongoDB 서비스가 시작되도록 설정합니다
+	sudo systemctl enable mongodb
+
+	sudo systemctl status mongodb
+	
+4. 환경파일(.env)생성, 데이터베이스 URL 설정
+/home/fastapi/ch06/planner_mongoDB/.env 파일을 생성
+touch /home/fastapi/ch06/planner_mongoDB/.env
+설정
+nano /home/fastapi/ch06/planner_mongoDB/.env
+	DATABASE_URL=mongodb://localhost:27017/planner
+	
+	
+5. 데이터베이스 초기화, CRUD처리: save, get, update, delete
+/database/connection.py
+	Setting 클래스 정의
+		애플리케이션에서 Settings 클래스의 인스턴스인 settings 를 호출하면
+			# main.py
+			@asynccontextmanager
+			async def lifespan(app: FastAPI):
+				await settings.initialize_database()
+			app = FastAPI(lifespan=lifespan)
+
+	init_beanie 함수가 호출되고 
+	Beanie와 MongoDB 사이의 연결이 설정되어, 
+	Beanie가 MongoDB와 상호작용할 수 있는 준비가 된다는 것을 의미합니다.
+	다시 말해 클라이언트 요청을 받아 데이터베이스 작업을 수행할 수 있는 상태가 된다는 의미입니다.
+		# connection.py
+	 	class Settings(BaseSettings):
+	 		async def initialize_database(self):
+	 			self.client = AsyncIOMotorClient(self.DATABASE_URL)  
+				database = self.client["planner"]  
+				await init_beanie(database=database, document_models=[Event, User]) 
+ 	
+/database/crud.py
+데이터베이스 클라이언트 설정코드 추가
+	Database 클래스는 CRUD 작업을 추상화한 클래스로, 
+	Beanie 모델(Event 클래스)을 사용하여 MongoDB와 상호작용합니다.
+		예를 들어 Database 클래스의 save 메서드에서는
+		async def save(self, document) -> None:
+			await document.create()
+			return
+		document.create()가 Beanie 모델 인스턴스의 create 메서드를 호출하여, 
+		MongoDB 컬렉션에 문서를 생성합니다. 여기서 document는 Event 클래스의 인스턴스입니다.
+		Event 클래스는 beanie의 Document 클래스를 상속받습니다. 
+	Database 클래스의 인스턴스인 event_database는 Event 모델을 기반으로 데이터베이스 작업(CRUD 작업)을 수행합니다.
+
+6. beanie가 제공하는 Document 클래스로 문서모델 정의 
+/model/events.py
+	Event 클래스
+		Event 클래스는 beanie의 Document 클래스를 상속받습니다. 
+		이는 Event 클래스가 Pydantic 모델 형식을 따르면서 MongoDB 문서와 매핑된다는 것을 의미합니다.
+		이 클래스는 MongoDB 컬렉션에서 각 문서의 구조를 정의합니다.
+	EventUpdate 클래스
+
+
+/model/user.py
+	User 클래스
+
+7. 이벤트 라우트용 CRUD 처리
+/routes/events.py
+	각 라우트 비동기 함수 내에서 await 키워드는 event_database 인스턴스의 메서드 호출과 함께 사용됩니다. 
+	이는 비동기적으로 데이터베이스 작업을 수행하기 위해 필요합니다.
+	
+8. 사용자 등록 및 로그인 라우트
+/routes/users.py
+
+9. main 모듈
+
+	main 모듈에서 connection.py 모듈에 정의된 
+	Settings 클래스의 인스턴스 settings의 initialize_database 메서드가 실행되면, 
+	MongoDB와 연결된 Beanie 동작 환경이 생성됩니다.
+	이는 애플리케이션이 실행될 때 MongoDB와의 연결을 설정하고, Event 및 User 모델을 초기화합니다.(문서 모델을 사용할 수 있게 합니다.)
+	
+	서버가 실행되고 있는 동안, 클라이언트의 요청을 처리하기 위해 MongoDB와 연결된 상태가 유지됩니다.
+	서버가 종료될 때까지 클라이언트 요청을 받는 상태가 지속됩니다.
+
+
+정리
+
+beanie 가 핵심
+beanie의 document 클래스를 상속한 Event 모델로 클라이언트로 부터 받은 요청바디의 유효성을 검증하는 동시에 바디 데이터를 mongoDB로 넘겨 NoSQL 작업이 수행되고
+애플리케이션을 mongoDB와 데이터 모델을 Event 모델 형식으로 정의한 mongoDB와 연결시키는 것도 beanie가 하고
+애플리케이션이 실행될 때 클라이언트 요청과 애플리케이션 그리고 mongoDB를 연결하는 것도 beanie 
+
+	Beanie의 주요 역할
+	데이터 모델 정의:
+		Beanie의 Document 클래스를 상속한 Event 모델은 데이터의 구조를 정의합니다.
+		클라이언트로부터 받은 요청 바디의 유효성을 검증하고, 이 데이터를 MongoDB 문서 형식으로 변환합니다.
+		
+	MongoDB와의 연결 설정:
+		Beanie는 init_beanie 함수를 통해 MongoDB 데이터베이스와 연결을 설정합니다.
+		이 함수는 MongoDB와의 연결을 초기화하고, Pydantic 모델(Event 등)을 MongoDB 컬렉션에 매핑합니다.
+		
+
+	FastAPI와의 통합:
+		Beanie는 FastAPI 애플리케이션이 실행될 때 클라이언트 요청을 처리하고, MongoDB와 상호작용할 수 있는 환경을 제공합니다.
+		애플리케이션의 생명 주기 동안 데이터베이스 연결을 관리하고, 종료 시에는 안전하게 연결을 닫습니다.
+		
+	CRUD 작업 수행:
+		Beanie는 정의된 모델을 통해 MongoDB에서 CRUD(생성, 읽기, 업데이트, 삭제) 작업을 수행합니다.
+		Database 클래스의 메서드(save, get, get_all, update, delete)는 Beanie 모델을 사용하여 이러한 작업을 추상화합니다.
+		라우트에서 Database 인스턴스를 사용하여 클라이언트 요청을 처리합니다.(CRUD 작업을 수행합니다.)
+
+
+	Event 모델이 Beanie의 Document 클래스를 상속하여 정의됩니다.	
+	
+	
+오류 사례
+				× mongodb.service - MongoDB Database Service
+					 Loaded: loaded (/etc/systemd/system/mongodb.service; enabled; vendor preset: enabled)
+					 Active: failed (Result: exit-code) since Mon 2024-05-20 20:35:02 KST; 18s ago
+				   Main PID: 6359 (code=exited, status=2)
+						CPU: 74ms
+
+				 5월 20 20:35:02 philosucker-Lenovo-IdeaPad-S340-15API systemd[1]: mongodb.service: Scheduled restart job, restart counter is at 5.
+				 5월 20 20:35:02 philosucker-Lenovo-IdeaPad-S340-15API systemd[1]: Stopped MongoDB Database Service.
+				 5월 20 20:35:02 philosucker-Lenovo-IdeaPad-S340-15API systemd[1]: mongodb.service: Start request repeated too quickly.
+				 5월 20 20:35:02 philosucker-Lenovo-IdeaPad-S340-15API systemd[1]: mongodb.service: Failed with result 'exit-code'.
+				 5월 20 20:35:02 philosucker-Lenovo-IdeaPad-S340-15API systemd[1]: Failed to start MongoDB Database Service.
+				 
+				위 메시지는 권한을 philosucker:philosucker가 아니라 mongodb:mongodb 로 해서 생긴것 같다
+
+				mongod --config /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.conf
+				위 코드를 실행했는데
+				아무 메시지도 안뜨고 새로운 커맨드 라인이 뜨고
+				(holdem) philosucker@philosucker-Lenovo-IdeaPad-S340-15API:~$ ps aux | grep mongod
+				mongodb     1645  0.8  1.4 2643900 149596 ?      Ssl  22:08   0:21 /usr/bin/mongod --config /etc/mongod.conf
+				philosu+    6550  0.0  0.0  10544  2432 pts/0    S+   22:49   0:00 grep --color=auto mongod
+
+				위와 같이 나오면 문제가 있는건가?
+
+
+
+				위의 출력 내용을 보면 /usr/bin/mongod --config /etc/mongod.conf로 실행된 MongoDB 인스턴스가 실행 중입니다.
+
+				문제 원인
+				mongod --config /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.conf 명령이 올바르게 실행되지 않았습니다.
+				기본적으로 시스템에 설정된 MongoDB 서비스(/etc/mongod.conf를 사용하는)가 실행 중입니다.
+
+				단계별로 해결 방법
+				1. 현재 실행 중인 MongoDB 서비스 중지
+
+				먼저, 현재 실행 중인 MongoDB 서비스를 중지합니다. 이는 /etc/mongod.conf를 사용하는 MongoDB 인스턴스입니다.
+				sudo systemctl stop mongod
+
+				2. MongoDB 프로세스 종료
+
+				만약 시스템 서비스가 아닌 MongoDB 인스턴스가 실행 중이라면, 모든 mongod 프로세스를 강제로 종료합니다.
+				pkill mongod
+
+				3. 올바른 설정 파일로 MongoDB 실행
+
+				수동으로 MongoDB를 올바른 설정 파일을 사용하여 다시 실행합니다. 
+				이 명령이 백그라운드에서 실행되도록 &를 사용하거나 nohup을 사용할 수 있습니다.
+
+				mongod --config /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.conf --fork --logpath /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.log
+
+				위 명령은 MongoDB를 백그라운드에서 실행시키고 로그를 지정된 경로에 저장합니다.
+
+				4. MongoDB 실행 확인
+
+				다음 명령을 사용하여 MongoDB 프로세스가 올바르게 실행 중인지 확인합니다.
+
+				ps aux | grep mongod
+
+
+				holdem) philosucker@philosucker-Lenovo-IdeaPad-S340-15API:~$ ps aux | grep mongod
+				philosu+    6699  1.7  1.1 2632900 115344 ?      Sl   22:54   0:01 mongod --config /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.conf --fork --logpath /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.log
+				philosu+    6769  0.0  0.0  10412  2432 pts/0    S+   22:55   0:00 grep --color=auto mongod
+
+
+				MongoDB가 /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.conf 설정 파일을 사용하여 실행되고 있으며, 로그 파일도 지정된 경로에 기록되고 있습니다.
+
+
+
+				다음 단계
+				로그 파일 확인
+
+				MongoDB가 올바르게 실행되고 있는지 확인하기 위해 로그 파일을 확인합니다:
+
+				tail -f /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.log
+
+				(holdem) philosucker@philosucker-Lenovo-IdeaPad-S340-15API:~$ tail -f /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.log
+				{"t":{"$date":"2024-05-20T22:55:21.753+09:00"},"s":"I",  "c":"ASIO",     "id":22582,   "ctx":"MigrationUtil-TaskExecutor","msg":"Killing all outstanding egress activity."}
+				{"t":{"$date":"2024-05-20T22:55:21.754+09:00"},"s":"I",  "c":"COMMAND",  "id":4784923, "ctx":"initandlisten","msg":"Shutting down the ServiceEntryPoint"}
+				{"t":{"$date":"2024-05-20T22:55:21.754+09:00"},"s":"I",  "c":"CONTROL",  "id":4784928, "ctx":"initandlisten","msg":"Shutting down the TTL monitor"}
+				{"t":{"$date":"2024-05-20T22:55:21.754+09:00"},"s":"I",  "c":"CONTROL",  "id":6278511, "ctx":"initandlisten","msg":"Shutting down the Change Stream Expired Pre-images Remover"}
+				{"t":{"$date":"2024-05-20T22:55:21.754+09:00"},"s":"I",  "c":"CONTROL",  "id":4784929, "ctx":"initandlisten","msg":"Acquiring the global lock for shutdown"}
+				{"t":{"$date":"2024-05-20T22:55:21.754+09:00"},"s":"I",  "c":"-",        "id":4784931, "ctx":"initandlisten","msg":"Dropping the scope cache for shutdown"}
+				{"t":{"$date":"2024-05-20T22:55:21.754+09:00"},"s":"I",  "c":"CONTROL",  "id":20565,   "ctx":"initandlisten","msg":"Now exiting"}
+				{"t":{"$date":"2024-05-20T22:55:21.754+09:00"},"s":"I",  "c":"CONTROL",  "id":8423404, "ctx":"initandlisten","msg":"mongod shutdown complete","attr":{"Summary of time elapsed":{"Statistics":{"Enter terminal shutdown":"0 ms","Step down the replication coordinator for shutdown":"0 ms","Time spent in quiesce mode":"0 ms","Shut down FLE Crud subsystem":"0 ms","Shut down MirrorMaestro":"0 ms","Shut down WaitForMajorityService":"0 ms","Shut down the global connection pool":"0 ms","Shut down the replica set monitor":"0 ms","Shut down the migration util executor":"0 ms","Shut down the TTL monitor":"0 ms","Shut down expired pre-images and documents removers":"0 ms","Wait for the oplog cap maintainer thread to stop":"0 ms","Shut down full-time data capture":"0 ms","shutdownTask total elapsed time":"1 ms"}}}}
+				{"t":{"$date":"2024-05-20T22:55:21.754+09:00"},"s":"I",  "c":"CONTROL",  "id":23138,   "ctx":"initandlisten","msg":"Shutting down","attr":{"exitCode":48}}
+				{"t":{"$date":"2024-05-20T22:56:19.148+09:00"},"s":"I",  "c":"WTCHKPT",  "id":22430,   "ctx":"Checkpointer","msg":"WiredTiger message","attr":{"message":{"ts_sec":1716213379,"ts_usec":148663,"thread":"6699:0x75d1b3771640","session_name":"WT_SESSION.checkpoint","category":"WT_VERB_CHECKPOINT_PROGRESS","category_id":6,"verbose_level":"DEBUG_1","verbose_level_id":1,"msg":"saving checkpoint snapshot min: 35, snapshot max: 35 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1"}}}
+
+
+				로그 파일에서 MongoDB가 종료되었다는 메시지를 확인할 수 있습니다:
+				{"t":{"$date":"2024-05-20T22:55:21.754+09:00"},"s":"I",  "c":"CONTROL",  "id":8423404, "ctx":"initandlisten","msg":"mongod shutdown complete"}
+
+				이는 MongoDB 서버가 시작된 직후 종료되었음을 나타냅니다. 종료 이유는 로그 파일의 마지막 줄에서 exitCode가 48인 것을 통해 확인할 수 있습니다.
+
+				exitCode: 48은 일반적으로 이미 포트 27017을 사용 중인 다른 MongoDB 인스턴스가 존재하거나, 포트를 
+				사용할 수 없는 상태임을 나타냅니다.
+
+				포트 27017이 사용 중인지 확인합니다:
+				sudo lsof -iTCP -sTCP:LISTEN -P | grep 27017
+
+
+				위의 명령어 출력에서 포트 27017에서 mongod 프로세스가 여전히 실행 중임을 확인할 수 있습니다. 따라서 이미 실행 중인 MongoDB 인스턴스가 포트 27017을 점유하고 있어서 새로 실행하려는 MongoDB 인스턴스가 충돌하고 종료된 것입니다.
+
+				현재 실행 중인 MongoDB 인스턴스 종료
+
+				포트 27017을 점유하고 있는 MongoDB 인스턴스를 종료합니다:
+				pkill mongod
+
+				포트 27017이 여전히 사용 중인지 확인합니다:
+				sudo lsof -iTCP -sTCP:LISTEN -P | grep 27017
+
+				MongoDB 다시 실행
+				설정 파일을 사용하여 MongoDB를 다시 실행합니다. 이번에는 fork 옵션과 로그 파일을 사용하여 백그라운드에서 실행합니다:
+
+				mongod --config /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.conf --fork --logpath /home/philosucker/fastapi/ch06/planner_mongoDB/mongod.log
+
+
+				{"t":{"$date":"2024-05-20T23:01:15.963+09:00"},"s":"I",  "c":"STORAGE",  "id":5071100, "ctx":"initandlisten","msg":"Clearing temp directory"}
+				{"t":{"$date":"2024-05-20T23:01:15.965+09:00"},"s":"I",  "c":"CONTROL",  "id":6608200, "ctx":"initandlisten","msg":"Initializing cluster server parameters from disk"}
+				{"t":{"$date":"2024-05-20T23:01:15.965+09:00"},"s":"I",  "c":"CONTROL",  "id":20536,   "ctx":"initandlisten","msg":"Flow Control is enabled on this deployment"}
+				{"t":{"$date":"2024-05-20T23:01:15.966+09:00"},"s":"I",  "c":"FTDC",     "id":20625,   "ctx":"initandlisten","msg":"Initializing full-time diagnostic data capture","attr":{"dataDirectory":"/home/philosucker/fastapi/ch06/planner_mongoDB/store/diagnostic.data"}}
+				{"t":{"$date":"2024-05-20T23:01:15.969+09:00"},"s":"I",  "c":"REPL",     "id":6015317, "ctx":"initandlisten","msg":"Setting new configuration state","attr":{"newState":"ConfigReplicationDisabled","oldState":"ConfigPreStart"}}
+				{"t":{"$date":"2024-05-20T23:01:15.969+09:00"},"s":"I",  "c":"STORAGE",  "id":22262,   "ctx":"initandlisten","msg":"Timestamp monitor starting"}
+				{"t":{"$date":"2024-05-20T23:01:15.971+09:00"},"s":"I",  "c":"NETWORK",  "id":23015,   "ctx":"listener","msg":"Listening on","attr":{"address":"/tmp/mongodb-27017.sock"}}
+				{"t":{"$date":"2024-05-20T23:01:15.971+09:00"},"s":"I",  "c":"NETWORK",  "id":23015,   "ctx":"listener","msg":"Listening on","attr":{"address":"127.0.0.1"}}
+				{"t":{"$date":"2024-05-20T23:01:15.971+09:00"},"s":"I",  "c":"NETWORK",  "id":23016,   "ctx":"listener","msg":"Waiting for connections","attr":{"port":27017,"ssl":"off"}}
+				{"t":{"$date":"2024-05-20T23:01:15.971+09:00"},"s":"I",  "c":"CONTROL",  "id":8423403, "ctx":"initandlisten","msg":"mongod startup complete","attr":{"Summary of time elapsed":{"Startup from clean shutdown?":true,"Statistics":{"Transport layer setup":"0 ms","Run initial syncer crash recovery":"0 ms","Create storage engine lock file in the data directory":"0 ms","Get metadata describing storage engine":"0 ms","Validate options in metadata against current startup options":"0 ms","Create storage engine":"994 ms","Write current PID to file":"6 ms","Initialize FCV before rebuilding indexes":"3 ms","Drop abandoned idents and get back indexes that need to be rebuilt or builds that need to be restarted":"0 ms","Rebuild indexes for collections":"0 ms","Load cluster parameters from disk for a standalone":"0 ms","Build user and roles graph":"0 ms","Set up the background thread pool responsible for waiting for opTimes to be majority committed":"0 ms","Initialize information needed to make a mongod instance shard aware":"0 ms","Start up the replication coordinator":"2 ms","Start transport layer":"1 ms","_initAndListen total elapsed time":"1014 ms"}}}}
+
+
+				MongoDB 서버가 정상적으로 시작된 것 같습니다. 로그 파일에서 다음과 같은 메시지를 확인할 수 있습니다:
+				{"t":{"$date":"2024-05-20T23:01:15.971+09:00"},"s":"I",  "c":"CONTROL",  "id":8423403, "ctx":"initandlisten","msg":"mongod startup complete","attr":{"Summary of time elapsed":{"Startup from clean shutdown?":true,"Statistics":{"Transport layer setup":"0 ms","Run initial syncer crash recovery":"0 ms","Create storage engine lock file in the data directory":"0 ms","Get metadata describing storage engine":"0 ms","Validate options in metadata against current startup options":"0 ms","Create storage engine":"994 ms","Write current PID to file":"6 ms","Initialize FCV before rebuilding indexes":"3 ms","Drop abandoned idents and get back indexes that need to be rebuilt or builds that need to be restarted":"0 ms","Rebuild indexes for collections":"0 ms","Load cluster parameters from disk for a standalone":"0 ms","Build user and roles graph":"0 ms","Set up the background thread pool responsible for waiting for opTimes to be majority committed":"0 ms","Initialize information needed to make a mongod instance shard aware":"0 ms","Start up the replication coordinator":"2 ms","Start transport layer":"1 ms","_initAndListen total elapsed time":"1014 ms"}}}}
+
+				이제 MongoDB 서버가 정상적으로 실행되고 있으므로, FastAPI 애플리케이션과의 통합을 확인할 수 있습니다.
+
+				다시 한번
+				sudo systemctl stop mongod
+				pkill mongod
+				sudo systemctl start mongodb
+				sudo systemctl status mongodb
+
+
+
+
+
+테스트
+
+
+이벤트 라우트 테스트
+
+	이벤트 조회 GET 테스트
+	curl -X 'GET' 'http://127.0.0.1:8000/event/' -H 'accept: application/json' -H 'Content-Type: application/json'
+
+	이벤트 생성 POST 테스트
+	curl -X 'POST' 'http://127.0.0.1:8000/event/new' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"title": "test", "image": "https://test.com", "description": "testing", "tags":["test"], "location": "local"}'
+
+	이벤트 조회 GET 테스트 # 전체 조회 요청에서 확인한 id를 입력
+	curl -X 'GET' 'http://127.0.0.1:8000/event/664b5e73a2fd299a8a8046de' -H 'accept: application/json' -H 'Content-Type: application/json'
+	
+	이벤트 업데이트 PATCH 테스트
+	curl -X 'PUT' 'http://127.0.0.1:8000/event/edit/664b5e73a2fd299a8a8046de' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"title": "changed"}'
+	
+	이벤트 삭제 DELETE 테스트
+	curl -X 'DELETE' 'http://127.0.0.1:8000/event/delete/664b5e73a2fd299a8a8046de' -H 'accept: application/json'
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 	
+책 챕터7 보안
+
+현재 애플리케이션은 인증을 거치지 않은 사용자도 사용할 수 있다.
+JWT를 사용해 애플리케이션의 보안을 강화하여 
+오직 인증된 사용자만 애플리케이션을 사용할 수 있게 한다.
+
+인증 authentication 은 개체가 전달한 인증정보를 검증하는 것
+허가 authorization 은 개체가 특정 처리를 할 수 있도록 권한을 주는 것이다
+
+즉 인증정보 (ID, PW) 가 검증되면 권한이 주어진다.
+
+해시를 사용해 PW를 보호하고 
+애플리케이션에 인증계층을 추가한다
+
+
+
+	
+7.1 FastAPI가 지원하는 다양한 인증방법 중 일반적인 세가지 방식
+
+	chatGPT
+	1. 기본 HTTP 인증 방식
+	    사용자 이름과 비밀번호를 Base64로 인코딩한 후 
+	    HTTP 헤더에 포함하여 서버에 전달하는 방식
+	        - 구현이 간단하며, HTTP 표준에 정의되어 있어 
+	        대부분의 클라이언트와 서버에서 지원합니다.
+	        - 설정이 쉬우며, 단순한 API에 적합합니다.
+
+	        단점:
+	        - Base64 인코딩은 암호화가 아니기 때문에, 
+	        네트워크 상에서 쉽게 탈취될 수 있습니다.
+	        - HTTPS를 사용하지 않으면 보안에 취약합니다.
+	        - 매 요청마다 자격 증명을 포함해야 합니다.
+	        - 세션이나 상태를 유지하지 않습니다.
+	        
+	2. 쿠키 인증 방식
+	    - 사용자 세션을 유지할 수 있습니다.
+	    - 세션 데이터를 서버에 저장하므로 
+	    클라이언트에 민감한 정보를 저장하지 않습니다.
+	    - HTTPOnly 속성을 사용하여 
+	    JavaScript로 접근할 수 없게 설정할 수 있어
+	    XSS 공격에 대비할 수 있습니다.
+
+        단점:
+	    - 서버 측에서 세션을 관리해야 하므로 상태를 유지해야 합니다.
+	        - 세션 관리, 상태 유지의 의미:
+	            - 서버가 세션 ID 발급, 쿠키 설정, 
+		        클라이언트 식별, 상태정보 조회 및 저장, 
+		        상태정보 갱신을 해야 한다는 의미
+		        - 이 모든 세션 관련 정보는 
+		        서버 측의 별도의 상태 저장소
+		        (예: 메모리, 인메모리 데이터베이스, 또는 영구 저장소)에 저장.
+		        - 세션이 끝나면 상태 저장소는 정리됩니다.
+		          - 세션 무효화: 클라이언트가 로그아웃하면 
+		          서버는 해당 세션 ID를 무효화합니다. 
+		          		이는 상태 저장소에서 세션 정보를 삭제하거나,
+		          		 세션을 만료시키는 방식으로 이루어질 수 있습니다.
+		          - 최종 정보 업데이트: 
+		          만약 세션에 임시적으로 저장된 데이터가 있다면 
+		          		이 데이터는 로그아웃 시 
+		          		영구 저장소(예: 데이터베이스)에 저장될 수 있습니다.
+		          - 상태 저장소 정리: 로그아웃이 완료되면, 
+		          더 이상 사용할 필요가 없는 세션 정보는 
+		          상태 저장소에서 삭제됩니다.
+	    - CSRF(Cross-Site Request Forgery) 공격에 취약할 수 있습니다.
+	    - 구현 복잡성이 높습니다.
+
+	**예시: 쇼핑몰 애플리케이션**
+
+	- **로그인 요청 (세션 생성 및 쿠키 설정)**:
+	  - 클라이언트 -> 서버: 로그인 요청 (사용자 이름과 비밀번호)
+	  - 서버: 로그인 성공 시 세션 생성, 
+	  세션 ID 발급 (session_id: 12345), 
+	  DB에 세션 ID 저장
+	  - 서버 -> 클라이언트: 세션 ID를 쿠키로 설정, 
+	  클라이언트에 쿠키 반환 (쿠키: session=12345)
+
+	- **상태 유지 및 갱신: 이후 클라이언트 요청 처리 (상품 추가 요청)**:
+	  - 클라이언트 -> 서버: 상품 추가 요청 (쿠키에 세션 ID 포함)
+	  - 서버: 세션 ID를 통해 클라이언트를 식별 (session_id: 12345)
+	  - 서버: DB에서 해당 클라이언트의 상태정보(쇼핑 카트 정보)를 조회 및 갱신
+
+	쿠키 인증 방식에서 서버가 클라이언트의 상태를 기억하고 유지한다는 것은 
+	해당 클라이언트의 세션 ID에 따라 저장된 DB의 정보를 
+	클라이언트가 어떤 요청을 할 때마다 
+	쿠키를 통해 클라이언트 식별 후 DB 갱신한다는 것을 의미합니다.
+
+	3. Bearer 토큰 인증 방식
+
+	클라이언트가 인증 서버로부터 받은 JWT(JSON Web Token) 등의 토큰을
+	bearer 키워드와 함께
+	요청의 Authorization HTTP 헤더에 포함하여 
+	서버에 전달하는 방식입니다. 
+	JWT 토큰에는 
+	사용자 ID와 토큰 만료 기간으로 구성된 정보가 포함되는 것이 일반적입니다.
+
+	    - 토큰은 자체적으로 상태 정보를 포함할 수 있어, 
+	    서버는 상태를 유지하지 않아도 됩니다 (stateless).
+	      - 상태 비유지(stateless) 방식에서는 
+	      서버가 클라이언트의 세션을 관리하거나 유지할 필요가 없습니다.
+	      - JWT 자체에 
+	      필요한 모든 상태 정보(예: 사용자 ID, 권한 등)가 포함되어 있어, 
+	      별도의 상태 저장소가 필요 없습니다.
+	      - 각 요청은 독립적으로 처리되며, 이전 요청의 정보에 의존하지 않습니다.
+	      - 필요한 모든 인증 정보와 상태 정보는 
+	      클라이언트가 요청과 함께 서버에 제공해야 합니다.
+	      - JWT는 클라이언트 측에 저장되고, 요청 시마다 전송되므로 
+	      서버는 클라이언트의 상태를 별도로 관리하지 않습니다.
+
+	    - JWT는 클레임(claims)을 포함할 수 있어 
+	    사용자 정보나 권한을 쉽게 확장할 수 있습니다.
+	    - HTTPS와 함께 사용하면 매우 안전합니다.
+	    - OAuth 2.0 표준과 잘 맞습니다.
+
+	    단점:
+	    - 토큰의 유효성을 검증해야 하므로 복잡성이 증가할 수 있습니다.
+	    - 토큰이 탈취될 경우, 유효기간 동안 악용될 수 있습니다.
+	    - 토큰의 길이가 길어질 수 있습니다.
+
+	특징				  기본 HTTP 인증			쿠키 인증	Bearer 			토큰 인증
+	보안 수준	낮음 	  (HTTPS 필요)			중간 (CSRF 방지 필요)		높음 (HTTPS 필요)
+	상태 유지	없음 	  (Stateless)			있음 (Stateful)			없음 (Stateless)
+	구현 복잡성	          낮음					높음						중간
+	사용자 세션 관리	   없음					있음						없음
+	사용 예			   단순 API 인증			웹 애플리케이션 세션 관리	API 인증 및 OAuth 2.0
+
+
+	### 상태 유지 방식(Stateful)과 상태 비유지 방식(Stateless) 비교
+
+	| 특징               | 상태 유지 (Stateful)                                                | 상태 비유지 (Stateless)                                    |
+	|--------------------|---------------------------------------------------------------------|-----------------------------------------------------------|
+	| **서버 부하**        | 서버가 세션을 관리하고 저장해야 하므로 더 많은 리소스가 필요함 (**★★★**)        | 각 요청이 독립적이므로 서버 부하가 상대적으로 적음 (**★★★★★**)         |
+	| **확장성**          | 세션 정보를 공유하기 위해 서버 간의 추가적인 작업 필요. 확장성이 제한적일 수 있음 (**★★**) | 서버 간 세션 정보 공유 필요 없음, 쉽게 확장 가능 (**★★★★★**)            |
+	| **보안**           | 세션 하이재킹 등의 위험 존재 (**★★★**)                                 | 토큰 유효 기간 관리 필요, 토큰 탈취 시 위험 있음 (**★★★★**)             |
+	| **사용자 경험**      | 로그인 후 세션을 통해 사용자 상태를 기억하여 더 나은 사용자 경험 제공 (**★★★★★**)         | 매 요청마다 인증 필요, 상태를 기억하지 않음 (**★★★**)                  |
+	| **구현 복잡성**      | 세션 관리 로직이 필요하고, 서버 간 세션 동기화 필요할 수 있음 (**★★★★**)              | 상대적으로 간단함, 클라이언트가 인증 정보를 매 요청마다 포함 (**★★★**)  |
+	| **보안 강화**       | 클라이언트가 상태 정보를 저장하지 않고, 서버가 이를 관리하기 때문에 보안 측면에서 더 안전할 수 있음. 하지만 세션 하이재킹의 위험 존재 (**★★★**) | JWT는 서명이 포함되어 있어 데이터 변조를 방지할 수 있음. 토큰 유효 기간을 짧게 설정하여 보안을 강화할 수 있음 (**★★★★**) |
+	| **데이터 일관성 유지** | 서버가 모든 상태 정보를 중앙에서 관리하므로 데이터 일관성을 유지하기 쉬움 (**★★★★★**)   | 각 요청이 독립적으로 처리되기 때문에 중앙에서 상태 정보를 관리할 필요가 없음 (**★★★★**) |
+	| **유연성**          | 다양한 상태 정보를 서버가 관리하므로, 애플리케이션 설계가 유연해질 수 있음 (**★★★★**)  | JWT는 추가 클레임을 통해 다양한 상태 정보를 포함할 수 있으므로, 애플리케이션 설계가 매우 유연해짐 (**★★★★★**) |
+	| **확장성**          | 서버 간 세션 정보를 공유하기 위한 메커니즘이 필요하지만, 이를 통해 확장성을 확보할 수 있음 (**★★★**) | 서버가 상태 정보를 유지하지 않으므로, 서버 인스턴스를 자유롭게 추가하거나 제거할 수 있어 확장성이 매우 뛰어남 (**★★★★★**) |
+
+	
+	요약
+
+	- **확장성**: 
+	상태 비유지 방식은 
+	서버 간의 상태 동기화가 필요 없기 때문에 확장성이 매우 뛰어납니다. 
+	서버 인스턴스를 자유롭게 추가하거나 제거할 수 있으며, 로
+	드 밸런싱과 고가용성을 쉽게 구현할 수 있습니다. 
+	상태 유지 방식은 세션 정보를 공유하기 위한 추가 작업이 필요하여 
+	확장성이 상대적으로 제한적일 수 있습니다.
+	  
+	- **유연성**: 
+	상태 유지 방식도 유연성이 있지만, 
+	JWT를 사용하는 상태 비유지 방식은 
+	추가 클레임을 통해 다양한 상태 정보를 포함할 수 있어 
+	애플리케이션 설계가 매우 유연해집니다. 
+	상태 비유지 방식은 클라이언트가 인증 정보를 매 요청마다 포함하므로, 
+	다양한 사용 사례에 쉽게 적용할 수 있습니다.
+
+	- **보안**: 상태 유지 방식에서는 세션 하이재킹의 위험이 존재하지만, 
+	클라이언트가 민감한 상태 정보를 저장하지 않기 때문에 
+	보안 측면에서 상대적으로 안전할 수 있습니다. 
+	상태 비유지 방식에서는 JWT가 서명되어 있어 데이터 변조를 방지할 수 있으며, 
+	토큰의 유효 기간을 짧게 설정하여 보안을 강화할 수 있습니다. 
+	그러나 토큰 탈취 시 보안 위협이 존재할 수 있습니다.
+
+	이 표는 두 방식의 장단점을 명확히 비교하여, 
+	온라인 홀덤 게임 애플리케이션에서 어떤 방식이 더 적합한지 평가하는 데 
+	도움이 됩니다.
+
+
+
+	온라인 홀덤 게임 애플리케이션에서는 
+	상태 유지 방식(Stateful)과 상태 비유지 방식(Stateless) 중 
+	어떤 것이 더 적합한지 결정하려면 다음과 같은 요소들을 고려해야 합니다:
+
+		게임 상태 관리: 
+		각 플레이어의 현재 상태(카드, 칩 수, 베팅 금액 등)를 
+		효율적으로 관리할 수 있어야 합니다.
+		
+		실시간 상호작용: 
+		플레이어 간의 실시간 상호작용이 중요하며, 
+		게임의 상태가 빠르게 업데이트되고 동기화되어야 합니다.
+		
+		확장성과 성능: 
+		많은 수의 동시 접속자와 게임을 처리할 수 있어야 합니다.
+		보안: 게임 상태와 거래 내역의 보안이 중요합니다.
+
+	상태 유지 방식 (쿠키 인증)
+		장점
+			게임 상태 관리: 
+			서버가 플레이어의 게임 상태를 유지하기 때문에 
+			각 플레이어의 현재 상태를 쉽게 추적하고 관리할 수 있습니다.
+			
+			실시간 상호작용: 
+			서버가 중앙에서 상태를 관리하므로, 
+			모든 플레이어에게 빠르게 상태 업데이트를 전파할 수 있습니다.
+		단점
+			확장성: 
+			상태를 서버 측에서 유지해야 하기 때문에, 
+			많은 플레이어를 처리하는 데 서버의 부담이 커질 수 있습니다.
+			서버 간 세션 동기화가 필요할 수 있습니다.
+			
+			보안: 
+			세션 하이재킹 등의 위험이 존재합니다. 
+			그러나 적절한 보안 조치를 통해 이를 완화할 수 있습니다.
+
+	상태 비유지 방식 (JWT 인증)
+		장점
+			확장성: 
+			서버가 상태 정보를 유지하지 않기 때문에, 
+			서버 간 동기화가 필요 없으며, 쉽게 확장할 수 있습니다.
+			
+			보안: 
+			JWT는 서명을 통해 변조를 방지할 수 있으며,
+			 토큰의 유효 기간을 관리하여 보안을 강화할 수 있습니다.
+		단점
+			게임 상태 관리의 복잡성: 
+			각 요청에 필요한 모든 상태 정보를 포함해야 하므로, 
+			게임 상태를 관리하는 로직이 복잡해질 수 있습니다.
+			
+			실시간 상호작용: 
+			게임의 상태가 자주 변하는 경우, 
+			상태를 토큰에 포함하여 관리하는 것은 비효율적일 수 있습니다.
+		
+		
+	추천 방식: 하이브리드 접근 (Hybrid Approach)
+		온라인 홀덤 게임 애플리케이션의 요구사항을 충족시키기 위해, 
+		하이브리드 접근 방식이 적합할 수 있습니다. 
+		이 방식은 상태 유지 방식과 
+		상태 비유지 방식을 결합하여 사용하는 것입니다.
+
+		구현 예시
+			세션 관리: 
+			게임 세션과 같은 중요한 상태 정보는 서버 측에서 관리합니다. 
+			이를 통해 각 플레이어의 게임 상태를 효율적으로 관리할 수 있습니다.
+
+			JWT 인증: 
+			인증 및 권한 관리는 JWT를 사용하여 
+			클라이언트가 서버와 상호작용할 때 
+			필요한 최소한의 정보를 포함하도록 합니다. 
+			이를 통해 보안을 강화하고, 서버의 확장성을 유지할 수 있습니다.
+
+		예시 흐름
+
+			로그인:
+			클라이언트가 로그인하면 서버는 JWT를 발급합니다. 
+			이 JWT는 플레이어의 인증 정보를 포함합니다.
+			
+			서버는 또한 게임 세션을 생성하고, 
+			세션 ID를 클라이언트에 쿠키로 전달합니다.
+
+			게임 상태 관리:
+			클라이언트가 게임 요청을 보낼 때, 
+			JWT와 세션 ID를 함께 전송합니다.
+			서버는 JWT를 검증하여 클라이언트를 인증하고, 
+			세션 ID를 통해 게임 상태를 조회하고 갱신합니다.
+
+			실시간 상호작용:
+			게임 상태는 서버 측에서 관리되므로, 
+			다른 플레이어에게 빠르게 상태 업데이트를 전파할 수 있습니다.
+
+			온라인 홀덤 게임 애플리케이션에서는 
+			하이브리드 접근 방식을 사용하는 것이 적합합니다. 
+			게임 상태 관리는 서버 측에서 상태 유지 방식으로 처리하고, 
+			인증 및 권한 관리는 JWT를 사용하여 
+			상태 비유지 방식으로 처리함으로써, 
+			보안, 확장성, 실시간 상호작용을 모두 효율적으로 관리할 수 있습니다.
+
+
+
+
+의존성 주입은 '함수를 호출할 때마다' 
+필요한 의존성을 외부에서 주입받는 방식입니다. 
+	: 이 표현은 함수를 호출하는 매 순간마다 
+	새로운 의존성이 주입된다는 의미입니다. 
+	즉, 각 호출마다 의존성이 새로 결정되고 주입된다는 점을 강조합니다.
+	
+		의존성 주입은 '함수가 호출될 때만' 
+		필요한 의존성을 외부에서 주입받는 방식입니다. 
+			: 이 표현은 함수가 호출되는 시점에만 의존성이 주입된다는 의미입니다.
+			 즉, 호출되지 않으면 의존성이 주입되지 않음을 강조합니다.
+			 
+	더 적확한 표현은
+	"함수를 호출할 때마다 필요한 의존성을 외부에서 주입받는 방식입니다."
+	
+	이유는 다음과 같습니다:
+	의존성 주입의 본질: 
+	의존성 주입은 함수가 호출될 때마다 
+	외부에서 필요한 의존성을 주입받는 방식입니다. 
+	이는 각 호출 시마다 주입되는 의존성이 다를 수 있음을 의미합니다. 
+	예를 들어, 테스트 시에는 모의 객체(mock object)를 주입할 수 있고, 
+	실제 실행 시에는 실제 객체를 주입할 수 있습니다.
+
+	실행 시점의 유연성: 
+	"매번"이라는 표현은 함수 호출 시마다 
+	의존성이 새로 주입되어 다르게 동작할 수 있음을 강조합니다. 
+	이는 의존성 주입이 제공하는 유연성과 테스트 용이성을 잘 나타냅니다.
+
+	이는 객체의 의존성을 관리하기 쉽게 하고, 테스트 용이성을 높이며, 
+	코드의 재사용성을 증가시킵니다 .
+
+의존성 주입과 기본 인수 설정은 비슷해 보일 수 있지만, 
+실제로는 중요한 차이가 있습니다. 
+이를 이해하기 위해 FastAPI의 Depends를 사용하는 방식과 
+기본 인수를 설정하는 방식을 비교해 보겠습니다.
+
+기본 인수 설정은 함수가 호출될 때 기본값을 제공하는 방법입니다. 
+이는 의존성 주입과는 다소 다릅니다.
+
+	첫번째 코드
+		x = 5
+
+		def depend():
+			y = x * 2
+			return y
+
+		def func(value = depend()):
+			return value * 2
+
+		result = func()
+		print(result)  # 20
+
+첫번째 코드에서 func 함수는 기본 인수로 depend() 함수의 결과를 사용합니다. 
+	depend() 함수는 func 함수가 정의될 때 한 번 호출되고, 
+	그 결과가 기본값으로 설정됩니다. 
+	이는 호출 시점마다 depend()가 호출되지 않으며, 
+	기본값이 고정된 상태로 남아 있습니다.
+
+	두번째 코드
+		x = 5
+
+		def depend():
+			y = x * 2
+			return y
+
+		def func(dependency):
+			value = dependency()
+			return value * 2
+
+		# 의존성 주입
+		result = func(depend)
+		print(result)  # 20
+
+두번째 코드에서는 
+func 함수가 실제로 호출될때만 func(depend) 
+다시 말해 런타임시에만 의존성 주입이 일어나게 됩니다.
+
+FastAPI에서의 의존성 주입: 
+FastAPI는 Depends를 사용하여 의존성을 주입합니다.
+이는 함수가 필요로 하는 모든 의존성을 명시적으로 지정할 수 있게 하며,
+FastAPI가 해당 의존성을 해결하고 주입할 수 있도록 합니다 .
+
+	예시
+	User 클래스는 Document를 상속받아 
+	MongoDB 문서로 사용되는 모델을 정의합니다. 
+	email과 password 필드를 가지고 있습니다 .
+	
+	 # models/users.py
+	 class User(Document):
+		email: EmailStr
+		password: str
+	
+	
+	sign_user_up함수는 클라이언트 요청 본문에서 직접 User 객체를 받습니다. 
+	클라이언트가 POST 요청을 보낼 때, 
+	본문에 User 객체의 데이터를 포함하여 보냅니다. 
+	FastAPI는 이 데이터를 사용하여 User 객체인 user를 생성합니다.
+	
+	여기서 user 파라미터는 FastAPI의 내부 매커니즘을 통해 
+	클라이언트 요청 본문에서 전달된 데이터를 기반으로 자동으로 주입됩니다. 
+	이는 Pydantic 모델인 User를 사용하여 데이터 유효성 검사를 수행하고, 유
+	효한 데이터를 함수에 전달합니다.
+	
+	의존성 주입이 아님: 여기서 user 인수는 요청 데이터에서 직접 변환된 것이며, 
+	외부 함수에 의해 주입된 의존성이 아닙니다. 
+	이는 FastAPI의 자동 데이터 바인딩 기능입니다.
+	'''
+	# routes/users.py
+	@user_router.post("/signup")
+	async def sign_user_up(user: User) -> dict:
+		user_exist = await User.find_one(User.email == user.email) 
+
+		User.email: Beanie 모델 User의 email 필드를 나타내며, 
+		데이터베이스에서 해당 필드와 매칭되는 값을 찾는 조건입니다.
+		user.email: 이는 클라이언트가 요청 본문에서 제공한 
+		User 객체의 email 속성입니다.
+		
+		await User.find_one(User.email == user.email)은 
+		데이터베이스에서 User 모델의 email 필드가 
+		클라이언트의 email과 일치하는 문서를 찾는 쿼리입니다.
+		이 코드는 클라이언트의 이메일 주소가
+		데이터베이스에 이미 존재하는지 확인하여, 
+		중복된 이메일로 사용자를 생성하지 않도록 합니다.
+	
+	잘못된 사용 예
+	async def get_user():
+    return User(email="example@example.com", password="password")
+
+	@user_router.post("/signup")
+	async def sign_user_up(user = get_user()) -> dict:
+		user_exist = await User.find_one(User.email == user.email)
+    
+	위 방식은 작동하지 않습니다. 
+	    get_user 함수는 비동기 함수이므로, 
+	    비동기 실행 컨텍스트에서 실행되어야 합니다. 
+	    하지만 user = get_user() 방식은 비동기 실행을 지원하지 않습니다.
+	    sign_user_up 함수가 호출되는 시점에 동적으로 
+	    get_user()가 실행되지도 않습니다.
+	    
+	async def sign_user_up(user = get_user()) -> dict: 
+	함수 선언시 바로 user의 값은 고정 됩니다.
+	
+	올바른 사용 예
+    
+	from fastapi import Depends
+
+	async def get_user() -> User:
+		# 여기서 사용자 데이터를 생성하거나 가져오는 로직이 있을 수 있습니다.
+		return User(email="example@example.com", password="password")
+
+	'''
+	@user_router.post("/signup")
+	async def sign_user_up(user: User = Depends(get_user)) -> dict:
+		user_exist = await User.find_one(User.email == user.email)
+	
+	위 방식은 FastAPI의 의존성 주입을 사용하여 
+	비동기 함수인 get_user를 
+	"sign_user_up 함수가 호출되는 시점에만" 안전하게 호출하고, 
+	결과를 sign_user_up 함수에 주입합니다. 
+	이렇게 하면 get_user 함수가 비동기 함수이더라도 문제가 발생하지 않습니다.
+		
+	Depends는 비동기 함수(async def)와 동기 함수(def)를 모두 지원합니다. 
+	FastAPI는 함수가 비동기인지 동기인지를 자동으로 감지하고 적절히 처리합니다.
+	user = get_user() 방식은 비동기 함수를 적절히 처리할 수 없습니다.
+	
+
+	
+7.2 OAuth2 와 JWT를 사용한 애플리케이션 보안	
+
+JWT는 인코딩된 문자열로 제3자에 의해 해킹되는 걸 방지하기 위해 
+서버와 클라이언트만 알고 있는 고유한 키로 signed 된다.
+
+
+필요한 폴더와 파일을 만들고 인증시스템을 구축해보자
+
+    planner 폴더에 auth 폴더를 만들고 그 안에 파일을 만든다
+
+    mkdir auth
+    cd auth && touch {__init__, jwt_handler, authenticate, hash_password}.py
+
+    __init__.py : 해당 폴더에 있는 파일들이 모듈로 사용된다는 걸 명시한다
+    jwt_handler.py : JWT 문자열을 인코딩, 디코딩하는 함수가 포함된 모듈
+    authenticate.py : 인증 및 권한을 위해 라우트에 주입된다
+    hash_password.py : 패스워드를 암호화하는 함수, 입력받은 PW가 올바른지 확인하는 함수가 포함된 모듈
+
+책 챕터6 데이터베이스 연결 에서는 패스워드를 일반 텍스트로 저장했다
+패스워드는 적절한 라이브러리를 사용해서 반드시 암호화(해싱)해야한다.
+
+
+순서
+1. 패스워드 해시처리 모듈 생성
+
+    pip install bcrypt==3.1.7 passlib==1.7.4
+
+    # /auth/hash_password.py
+    
+    chatGPT 검토
+     에러 핸들링: 현재 코드에서는
+    pwd_context.hash 및 pwd_context.verify 호출 시 발생할 수 있는 예외를 처리하지 않고 있습니다. 
+     이러한 예외를 처리하여 프로그램이 예기치 않게 종료되지 않도록 하는 것이 좋습니다.
+    
+
+
+2. 사용자 등록시 해싱된 PW를 DB에 저장
+
+    # routes/users.py 
+
+    사용자 등록 테스트
+    curl -X 'POST' 'http://127.0.0.1:8000/user/signup' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"email": "test@test.com", "password": "test"}'
+
+	    -H 'accept: application/json': 서버가 JSON 형식의 응답을 반환할 것으로 기대한다는 것을 명시합니다.
+	    -H 'Content-Type: application/json': 전송하는 데이터가 JSON 형식임을 명시합니다.
+        
+        잘못된 요청 사례
+	    curl -X 'POST' 'http://127.0.0.1:8000/user/signup' -d '{"email": "test@test.com", "password": "test"}'
+
+	    헤더가 명시되지 않았습니다. 기본적으로 curl은 전송 데이터의 형식을 알지 못하므로, 
+	    이를 명시하지 않으면 서버가 데이터를 올바르게 처리하지 못할 수 있습니다.
+
+    DB에 저장된 패스워드가 제대로 해싱(암호화)됐는지 확인
+    새로운 터미널을 열고 
+    monghsh --port 27017
+    use planner
+    db.users.find({})
+
+3. JWT 구현 (액세스 토큰 생성과 검증)
+
+    3-1.
+        # database/connections.py
+	        SECRET_KEY: Optional[str] = None # 추가
+
+        .env 파일에 
+	        SECRET_KEY = HI5HL3V3L$3CR3T 추가
+
+    3-2.
+        # auth/jwt_handler.py
+
+        pip install python-jose[cryptography] python-multipart
+
+        create_access_token, verify_access_token 함수 구현
+        
+        chatGPT 검토
+        settings.SECRET_KEY가 정의되어 있지 않거나 잘못된 경우 오류가 발생할 수 있습니다.
+        time.time()을 사용하여 만료 시간을 설정하는 방식은 올바르지만, 시스템 시간이 변경될 경우 예기치 않은 동작이 발생할 수 있습니다.
+        jwt.encode와 jwt.decode 메서드는 예상대로 작동하지만, JWTError 외에도 jwt.ExpiredSignatureError와 같은 특정 예외를 처리하면 더 명확하게 오류를 잡아낼 수 있습니다.
+        JWT 예외 처리 부분을 구체화하여 예상하지 못한 예외를 모두 처리할 수 있도록 하는 것이 좋습니다.
+
+	    
+4. 이벤트 라우트에 주입될 사용자 인증 함수 구현
+
+    # /auth/authenticate.py
+    
+    chatGPT 검토
+    verify_access_token 함수가 올바르게 작동하지 않으면 authenticate 함수도 정상적으로 작동하지 않습니다.
+    tokenUrl="/user/signin" 경로가 올바르게 설정되어 있어야 하며, 이 경로가 실제로 유효해야 합니다.
+    verify_access_token 함수가 None을 반환하거나 예외를 발생시키면 decoded_token["user"] 접근 시 오류가 발생할 수 있습니다.
+
+
+5. 로그인용 응답모델 변경
+
+    # models/users.py
+    class UserSignIn(BaseModel) 폐기 후 
+    class TokenResponse(BaseModel) 추가
+
+6. 로그인 라우트 수정
+
+    # routes/users.py
+    sign_user_in 로그인 라우트 변경
+    아이디로 사용하는 email이 일치하고
+    입력한 패스워드가 DB상에 해싱된 패스워드와 일치하면
+    email로 access token을 만들어서 반환한다.
+    
+    chatGPT 검토
+    
+    보완할 수 있는 부분
+    유효성 검사 강화: 사용자 입력 값에 대한 추가적인 유효성 검사가 필요할 수 있습니다. 예를 들어, 비밀번호 복잡도 검사를 추가하여 더 강력한 비밀번호를 요구할 수 있습니다.
+    로그인 시도 제한: 로그인 시도 횟수를 제한하여 무차별 대입 공격(Brute-force attack)을 방지할 수 있습니다.
+
+    로그인 테스트
+
+    curl -X 'POST' 'http://127.0.0.1:8000/user/signin' -H 'accept: application/json' -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=&username=test%40test.com&password=test&scope=&clientid=&client_secret='
+
+
+    {"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoidGVzdEB0ZXN0LmNvbSIsImV4cGlyZXMiOjE3MTY2MjA1OTguNzkyNzE4fQ.gBndzp63nWUgO_WuTvoZfQUc4bpG9L8-yhLKv1WPd08","token_type":"Bearer"}
+
+7. 이벤트 라우트 수정
+
+    # routes/events.py
+    각 이벤트 라우트에 authenticate 의존성 주입을 해준다. 
+    즉 각 라우트에 보안을 적용.
+
+    이제 http://127.0.0.1:8000/docs 에 들어가면 
+    authorize 버튼이 활성화된다
+
+
+    신규 이벤트 생성 테스트 
+
+    로그인한 계정으로 새로운 이벤트 생성
+    curl -X 'POST' 'http://127.0.0.1:8000/event/new_event' -H 'accept: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoidGVzdEB0ZXN0LmNvbSIsImV4cGlyZXMiOjE3MTY2MjA1OTguNzkyNzE4fQ.gBndzp63nWUgO_WuTvoZfQUc4bpG9L8-yhLKv1WPd08' -H 'Content-Type: application/json' -d '{"title" : "test1", "image" : "https://test.com/test1.png", "description" : "test1", "tags" : ["test"], "location" : "test"}'
+
+    DB에 저장된 모든 이벤트 조회
+    curl -X 'GET' 'http://127.0.0.1:8000/event/get_all_events' -H 'accept: application/json'
+        
+        잘못된 용례
+        인증헤더와 유효한 토큰 없이 이벤트를 생성하려고 하면 401 오류가 반환된다
+        curl -X 'POST' 'http://127.0.0.1:8000/event/new_event' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"id": 1, "title": "test", "image": "https://test.com", "description": "testing", "tags":["test"], "location": "local"}'
+
+        {"detail":"Not authenticated"}
+
+
+8. 이벤트 라우트 업그레이드
+POST 라우트 : 이벤트 클래스에 creator 필드 추가
+UPDATE 라우트 : 사용자가 만든 이벤트만 변경할 수 있게 수정
+DELETE 라우트 : 사용자가 만든 이벤트만 삭제할 수 있게 수정
+
+    8-1. POST 라우트 수정
+    
+    # models/events.py
+    
+    테스트 
+
+    DB에 저장된 모든 이벤트 조회
+    curl -X 'GET' 'http://127.0.0.1:8000/event/get_all_events' -H 'accept: application/json'
+    
+   chatGPT models/events.py 검토
+    유효성 검사 강화: 
+    Event 클래스의 필드에 대한 추가 유효성 검사를 고려할 수 있습니다. 
+    예를 들어, title과 description의 길이 제한을 설정할 수 있습니다.
+
+    데이터 무결성: 
+    creator 필드는 인증된 사용자만이 설정할 수 있도록 보장해야 합니다. 
+    이는 관련 라우트에서 처리됩니다.
+
+    이미지 URL 유효성 검사: 
+    image 필드에 대해 URL 형식이 유효한지 확인하는 추가 검사를 고려할 수 있습니다.
+
+8-2. UPDATE 라우트 변경
+
+    # routes/events.py
+    
+    아래 블록 추가 
+    event = await event_database.get(id) 
+    if event.creator != user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Operation not allowed"
+        )
+        
+    테스트 
+    curl -X 'PUT' 'http://127.0.0.1:8000/event/edit_event/66503bdad5dd8e03320844b3' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoidGVzdEB0ZXN0LmNvbSIsImV4cGlyZXMiOjE3MTY2MjA1OTguNzkyNzE4fQ.gBndzp63nWUgO_WuTvoZfQUc4bpG9L8-yhLKv1WPd08' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"title" : "title1 changed"}'
+
+8-3. DELETE 라우트 변경
+
+    # routes/events.py
+    
+    event = await event_database.get(id) # 블록 추가 
+    if event.creator != user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Operation not allowed"
+        )
+        
+    테스트
+    curl -X 'DELETE' 'http://127.0.0.1:8000/event/delete_event/66503bdad5dd8e03320844b3' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoidGVzdEB0ZXN0LmNvbSIsImV4cGlyZXMiOjE3MTY2MjA1OTguNzkyNzE4fQ.gBndzp63nWUgO_WuTvoZfQUc4bpG9L8-yhLKv1WPd08' -H 'accept: application/json' -H 'Content-Type: application/json' 
+
+    curl -X 'GET' 'http://127.0.0.1:8000/event/get_all_events' -H 'accept: application/json'
+
+
+7.4 CORS 설정
+
+
+교차출처 리소스공유 CORS(Cross-Origin Resource Sharing는 
+등록되지 않은 사용자가 리소스를 사용하지 못하도록 제한하는 규칙이다.
+
+CORS는 보안 메커니즘이 아니라, 
+브라우저 수준에서만 작동하는 접근 제어 메커니즘입니다. 
+이는 서버의 인증 및 권한 부여를 대체하지 않습니다. 
+CORS는 주로 악의적인 사이트에서 사용자의 데이터를 탈취하는 것을 방지하기 위한 것입니다
+
+특정 프런트엔드 애플리케이션이 우리가 만든 웹 API 를 호출하면 
+브라우저가 호출의 출처를 확인해서 제한한다.
+
+즉 우리가 만든 웹 API 와 출처(도메인)가 동일한 경우 또는 
+우리가 만든 웹 API 가 허가한 출처만
+리소스에 접근할 수 있다.
+
+
+FastAPI에서는 CORSMiddleware 라는 CORS 미들웨어를 통해
+API에 접근 가능한 출처를 관리한다.
+이 미들웨어는 서버의 리소스에 접근할 수 있는 출처 목록을 배열로 관리한다.
+    미들웨어는 하나의 함수로, 특정 처리 사이의 중개자 역할을 한다
+    웹 API에서 미들웨어는 요청과 응답간의 중개자다.
+
+# main.py를 다음과 같이 변경하면 모든 클라이언트의 요청을 허가하게 된다
+
+from fastapi.middleware.cors import CORSMiddleware
+
+# 출처 등록
+
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
