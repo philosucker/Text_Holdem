@@ -15,7 +15,7 @@ class Base:
         self.rings = rings
         self.stakes = stakes
         self.ws_url = ws_url
-
+        asyncio.run(self.async_init)
         asyncio.create_task(self.async_init())
 
     async def async_init(self):
