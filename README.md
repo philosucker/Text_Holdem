@@ -48,9 +48,9 @@
 1. Domain Knowledge : No Limit Texas Holdem  
 2. Programming Language : Python, C#  
 3. Backend : FastAPI  
-4. Database : MySQL, MongoDB  
-5. Application : Unity  
-7. Network Programming : Nginx, HTTP, Web Socket, Message Broker  
+4. Database : MySQL(SQLAlchemy), MongoDB(Beanie)  
+5. Application : Unity
+7. Network Programming : Nginx, HTTP, Web Socket, Message Broker(Kafka)  
 8. Asyncrnous Programming : AsyncIO  
 9. Deep Learning : LLM, DRL for AI Holdem Agent  
 10. DevOps : Docker, Kubernetes  
