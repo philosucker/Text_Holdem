@@ -50,7 +50,7 @@
 3. Backend : FastAPI  
 4. Database : MySQL(SQLAlchemy), MongoDB(Beanie)  
 5. Application : Unity
-7. Network Programming : Nginx, HTTP, Web Socket, Message Broker(Kafka)  
+7. Network Programming : Nginx, HTTP, Web Socket, Message Broker(RabbitMQ)  
 8. Asyncrnous Programming : AsyncIO  
 9. Deep Learning : LLM, DRL for AI Holdem Agent  
 10. DevOps : Docker, Kubernetes  
@@ -114,7 +114,7 @@
 - Started learning socket programming (WebSocket)  
 
 07.18.2024  
-- Started learning message broker (Kafka)  
+- Started learning message broker
 
 07.19.2024  
 - Started learning AsyncIO
