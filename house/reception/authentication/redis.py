@@ -1,3 +1,6 @@
 import redis
 
-redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+# Redis 클라이언트 설정
+redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+
+

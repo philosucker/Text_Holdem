@@ -13,6 +13,10 @@ class Database:
         result = await self.session.execute(select(User).filter(User.email == email))
         return result.scalars().first()
 
+    async def get_user_by_nick(self, nick_name: str):
+        result = await self.session.execute(select(User).filter(User.nick_name == nick_name))
+        return result.scalars().first()
+    
     # 이 함수를 쓰는 라우터는 아직 미구현. 관리자용
     async def get_user_by_id(self, user_id: int):
         result = await self.session.execute(select(User).filter(User.id == user_id))
@@ -51,7 +55,6 @@ class Database:
                 detail="User with the same email already exists."
             )
 
-    # 이 함수를 쓰는 라우터는 아직 미구현. 관리자용
     async def update_user(self, user: User):
         try:
             await self.session.commit()
@@ -64,7 +67,6 @@ class Database:
                 detail="Integrity error occurred while updating user."
             )
         
-    # 이 함수를 쓰는 라우터는 아직 미구현. 관리자용
     async def delete_user(self, user: User):
         try:
             await self.session.delete(user)
