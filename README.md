@@ -122,7 +122,8 @@
 07.24.2024
 - Completed MicroService Architecture design.  
   <img src="https://github.com/user-attachments/assets/96cb4329-e87c-4ba8-b0e5-f0139ae5412d" width="1000" />  
-  
+  <img src="file:///home/philosucker/%EB%8B%A4%EC%9A%B4%EB%A1%9C%EB%93%9C/arch.jpg" width="1000" />  
+
 ## Directory Structure  
 
     app
