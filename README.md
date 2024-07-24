@@ -77,8 +77,8 @@
 - Started learning Unity.  
   
 06.19.2024  
-- Completed Monolithic Architecture design  
-- Planned to upgrade to Micro Service Architecture after development of texas holdem dealer algorithm.  
+- Completed Monolithic Architecture design.  
+- Planned to upgrade to MicroService Architecture after development of texas holdem dealer algorithm.  
   <img src="https://github.com/philosucker/Text_Holdem/assets/65852355/9219939e-fff9-4f3f-885f-d25b718339c0" alt="홀덤-2" width="600" />
 
 06.24.2024
@@ -107,18 +107,20 @@
 - Implement test case DB and test functions and start dealer logic testing.  
 
 07.10.2024    
-- Completed implementation of "side pot" creation and management algorithm    
-- Completed implementation of  "pot award" algorithm    
+- Completed implementation of "side pot" creation and management algorithm.    
+- Completed implementation of  "pot award" algorithm.    
 
 07.16.2024  
-- Started learning socket programming (WebSocket)  
+- Started learning socket programming. (WebSocket)  
 
 07.18.2024  
-- Started learning message broker
+- Started learning message broker.
 
 07.19.2024  
-- Started learning AsyncIO
+- Started learning AsyncIO.  
 
+07.24.2024
+- Completed MicroService Architecture design.
   
 ## Directory Structure  
 
