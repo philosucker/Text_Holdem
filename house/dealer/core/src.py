@@ -37,12 +37,8 @@ class Base:
         self._initialize_action_state()
         self._initialize_conditions()
 
-        # variable for end_condition, finishing_street, face_up_user_hand
         self.all_in_users_total = OrderedDict()
-
-        # variables for end_condition, finishing_street, check_connection
         self.fold_users_total = OrderedDict()
-        self.log_community_cards = {"burned" : [], "flop" : [], "turn" : [], "river" : [], "table_cards" : []} 
 
         # constants for showdown
         self.card_rank_order = "23456789TJQKA"
@@ -51,6 +47,8 @@ class Base:
             "flush": 6, "straight": 5, "set": 4, "trips": 4, "two_pair": 3, "one_pair": 2,
             "high_card": 1
         }
+
+        self.log_community_cards = {"burned" : [], "flop" : [], "turn" : [], "river" : [], "table_cards" : []} 
         self.log_nuts = {}
 
         # variables for pot awarding
@@ -322,6 +320,7 @@ class Base:
         self.game_log["log_side_pots"] = self.side_pots
         self.game_log["log_pot_change"] = self.log_pot_change 
         self.game_log["log_hand_actions"] = self.log_hand_actions  # 매 스트릿 일어난 모든 액션들의 내용을 일어난 순서대로 기록
+        self.game_log["log_community_cards"] = self.log_community_cards
         self.game_log["log_best_hands"] = self.log_best_hands  # 쇼다운 결과 각 유저의 베스트 핸즈
         self.game_log["log_nuts"] = self.log_nuts # 쇼다운 결과 넛츠
         self.game_log["log_users_ranking"] = self.log_users_ranking # 쇼다운 결과 핸즈 랭킹
@@ -697,7 +696,7 @@ class Base:
         community_cards: list = self.log_community_cards["table_cards"]
 
         return community_cards
-    
+                
     async def _face_up_user_hand(self) -> dict:
 
         user_hand = dict()
@@ -1066,7 +1065,7 @@ class Base:
         else:
             raise ValueError("Sidepot calculation is incorrect.")
 
-    async def _pot_award_1(self, nuts: dict, street_name: str) -> None:
+    async def _side_pot_award(self, nuts: dict, street_name: str) -> None:
         '''
         종류 : 리턴값이 없는 함수
         기능 : 
@@ -1144,7 +1143,7 @@ class Base:
             print(self.pot_total)
         assert self.pot_total == 0
 
-    async def _pot_award_2(self, nuts : dict, street_name : str) -> None:
+    async def _ratio_using_ranking_award(self, nuts : dict, street_name : str) -> None:
         '''
         종류 : 리턴값이 없는 함수
         기능 : 
@@ -1306,7 +1305,7 @@ class Base:
             print(self.pot_total)
         assert self.pot_total == 0
 
-    async def _pot_award_3(self, nuts : dict, street_name : str) -> None:
+    async def _side_pot_using_ranking_award(self, nuts : dict, street_name : str) -> None:
         '''
         종류 : 리턴값이 없는 함수
         기능 : 

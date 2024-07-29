@@ -1,5 +1,4 @@
 from fastapi import WebSocket
-import asyncio
 from src import Base
 
 class Dealer(Base):
@@ -33,6 +32,7 @@ class Dealer(Base):
         await self._broadcast_message("Pot Total", self.pot_total)
 
         await self._check_connection(self.connections.keys())
+
         # 유저 액선큐 등록
         if self.start_order:
             self.action_queue.append(self.start_order.popleft())
@@ -60,6 +60,7 @@ class Dealer(Base):
         await self._broadcast_message("Pot Total", self.pot_total)
 
         await self._check_connection(self.connections.keys())
+
         # 유저 액선큐 등록
         if self.start_order:
             self.action_queue.append(self.start_order.popleft())
@@ -127,7 +128,9 @@ class Dealer(Base):
             if not {"check", "fold"} & answer.keys():
                 await self._broadcast_message("Stack Size", self.players[current_player]['stk_size'])
                 await self._broadcast_message("Pot Size", self.pot_total)
-                   
+
+            await self._check_connection(self.connections.keys())
+            
             # 다음 차례 유저 액션큐 등록
             if self.start_order:
                 self.action_queue.append(self.start_order.popleft())
@@ -211,59 +214,40 @@ class Dealer(Base):
         return False
     
     async def _showdown(self, street_name : str) -> dict:
-        # 커뮤니티 카드 오픈 순서
-        async def _community_cards_open_order(street_name) -> list:
-            stages = {
-                'pre_flop': [("burned", 0), "flop", ("burned", 1), "turn", ("burned", 2), "river"],
-                'flop': [("burned", 1), "turn", ("burned", 2), "river"],
-                'turn': [("burned", 2), "river"],
-                'river': []
-            }
-            open_order = []
-            for stage in stages.get(street_name, []):
-                if isinstance(stage, tuple):
-                    open_order.append(self.log_community_cards[stage[0]][stage[1]])
-                else:
-                    open_order.append(self.log_community_cards[stage])
-            return open_order
         
-        community_cards : list = await self._face_up_community_cards_for_showdown(street_name) # _face_up_community_cards_for_showdown 호출 후
-        community_cards_open_order : list = await _community_cards_open_order(street_name) #_community_cards_open_order 호출되어야 한다. 호출순서 바뀌면 안됨
-        
-        await self._check_connection(self.connections.keys())
-
+        community_cards : list = await self._face_up_community_cards_for_showdown(street_name) 
         user_cards : dict = await self._face_up_user_hand()
         nuts = await self._compare_hand(user_cards, community_cards)
 
         if self.user_card_open_first:
             '''
-            서버에 요청
-            모든 클라이언트에게 동시에 스타팅 카드 오픈 렌더링 후
-            커뮤니티 카드 오픈 렌더링 요청
+            클라이언트에게 렌더링 요청
+            스타팅 카드 오픈 렌더링 후
+            커뮤니티 카드 오픈 렌더링
             '''
-            message = {"User Cards" : user_cards, "Community Cards Open Order" : community_cards_open_order}
+            message = {"User Cards" : user_cards, "Community Cards Open Order" : community_cards}
             await self._broadcast_message("User Cards Open First", message)
 
         elif self.table_card_open_first and street_name != 'river':
             if self.table_card_open_only:
                 '''
-                서버에 요청
-                모든 클라이언트에 커뮤니티 카드 오픈 렌더링 
+                클라이언트에게 렌더링 요청
+                커뮤니티 카드 오픈 렌더링 
                 '''            
-                await self._broadcast_message("Community Cards Open Order", community_cards_open_order)
+                await self._broadcast_message("Community Cards Open Order", community_cards)
             '''
-            서버에 요청
-            모든 클라이언트에 커뮤니티 카드 오픈 렌더링 후
-            유저의 액션 순서대로 스타팅 카드 오픈 렌더링 요청
+            클라이언트에게 렌더링 요청
+            커뮤니티 카드 오픈 먼저 렌더링 후
+            유저의 액션 순서대로 스타팅 카드 오픈 렌더링
             '''
-            await self._broadcast_message("Table Cards Open First", community_cards_open_order)
+            await self._broadcast_message("Table Cards Open First", community_cards)
             user_cards_open_order = {position: user_cards[position] for position in self.actioned_queue if position in user_cards}
             await self._broadcast_message("User Cards Open Order", user_cards_open_order)
         
         elif street_name == 'river':
             if self.river_all_check:
                 '''
-                서버에 요청
+                클라이언트에게 렌더링 요청
                 리버에서 체크했던 순서대로 클라이언트 카드 오픈
                 '''
                 user_cards_open_order = {position: user_cards[position] for position in self.check_users if position in user_cards}
@@ -276,7 +260,7 @@ class Dealer(Base):
                 pass
             elif self.river_bet_exists and not self.table_card_open_only:
                 '''
-                서버에 요청
+                클라이언트에게 렌더링 요청
                 리버에서 마지막으로 베팅액션을 한 클라이언트부터 딜링 방향으로 카드 오픈
                 '''
                 user_cards_open_order = {position: user_cards[position] for position in self.actioned_queue if position in user_cards}
@@ -284,16 +268,16 @@ class Dealer(Base):
 
         return nuts
 
-    async def _pot_award(self, nuts : dict, street_name : str, version : int) -> None:
+    async def _pot_award(self, nuts : dict, street_name : str, version = 'side_pot') -> None:
 
-        if version == 1:
-            await self._pot_award_1(nuts, street_name)
+        if version == 'side_pot':
+            await self._side_pot_award(nuts, street_name)
 
-        elif version == 2:
-            await self._pot_award_2(nuts, street_name)
+        elif version == 'ratio_using_ranking':
+            await self._ratio_using_ranking_award(nuts, street_name)
         
-        elif version == 3:
-            await self._pot_award_3(nuts, street_name)
+        elif version == 'side_pot_using_ranking':
+            await self._side_pot_using_ranking_award(nuts, street_name)
 
     ####################################################################################################################################################
     ####################################################################################################################################################
@@ -310,7 +294,7 @@ class Dealer(Base):
         showdown = await self._end_conditions(street_name)
         if showdown:
             nuts = await self._showdown(street_name)
-            await self._pot_award(nuts, street_name, 1)
+            await self._pot_award(nuts, street_name)
         else:
             await self._flop()
     
@@ -323,7 +307,7 @@ class Dealer(Base):
         showdown = await self._end_conditions(street_name)
         if showdown:
             nuts = await self._showdown(street_name)
-            await self._pot_award(nuts, street_name, 1)
+            await self._pot_award(nuts, street_name)
         else:
             await self._turn()
     
@@ -336,7 +320,7 @@ class Dealer(Base):
         showdown = await self._end_conditions(street_name)
         if showdown:
             nuts = await self._showdown(street_name)
-            await self._pot_award(nuts, street_name, 1)
+            await self._pot_award(nuts, street_name)
         else:
             await self._river()
     
@@ -349,7 +333,7 @@ class Dealer(Base):
         showdown = await self._end_conditions(street_name)
         if showdown:
             nuts = await self._showdown(street_name)
-            await self._pot_award(nuts, street_name, 1)
+            await self._pot_award(nuts, street_name)
         else:
             raise SystemExit("!!!!!!!!!!!!!!종료조건에 걸리지 않는 상황입니다. 유저들의 액션을 검토해서 종료조건을 수정하거나 추가하세요!!!!!!!!!!!!!!")
 
