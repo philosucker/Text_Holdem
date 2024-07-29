@@ -123,6 +123,11 @@
 - Completed MicroService Architecture design.  
   <img src="https://github.com/user-attachments/assets/3699ded5-b884-49a7-a286-5963c6c341ac" width="1000" />  
 
+07.29.2024    
+- Completed implementation of "dealer algorithm" online version.
+
+
+  
 ## Directory Structure  
 
     app
