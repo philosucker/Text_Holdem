@@ -238,7 +238,7 @@ class Base:
         self.fold_users = list()
         self.check_users = list()
 
-        self.attack_flag = False # only only and just once bet, raise, all-in is True  # 플롭부터는 False로 초기화
+        self.attack_flag = False # 프리플롭만 True
         self.raise_counter = 0 
         self.reorder_flag = True # 
 
@@ -261,23 +261,6 @@ class Base:
         self.river_bet_exists = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
 
         self.survivors = list()
-
-    async def _check_connection(self, on_user_list : list) -> None:
-        '''
-        종류 : 상태변경함수
-        기능 : 현재 접속중이지 않은 유저들을 fold_users_total 로 이동
-        목적 : 접속 중인 유저를 대상으로 하는 연산에서 제외
-
-        on_user_list : 서버에서 전달 받은 현재 접속 중인 클라이언트들의 유저 아이디 리스트
-        '''
-        # 만약 게임 도중에 접속이 끊긴 경우 해당유저는 폴드처리를 해야할 뿐만 아니라 start_order 에서도 제외 시켜야 한다. 그렇지 않으면 게임 종료되지 않을 수 있음
-        connected_users = []
-        if on_user_list:
-            for on_user in on_user_list:
-                connected_users.append(on_user)
-            for position in self.start_order:
-                if position not in connected_users:
-                    self.fold_users_total[position] = self.start_order.popleft()
 
     async def _next_position(self, position):
         if self.rings == 6:
@@ -333,7 +316,7 @@ class Base:
 
     async def _broadcast_message(self, title : str, data :dict) -> None:
         message = {title : data}
-        await asyncio.gather(*[client_web_socket.send_json(message) for client_web_socket in self.connections.values()])
+        await asyncio.gather(*[websocket.send_json(message) for websocket in self.connections.values()])
     
     async def _notify_clients_nick_positions(self) -> None:
         users_position_nick = {position : self.players[position]["user_nick"] for position in self.players}
@@ -993,7 +976,7 @@ class Base:
         
         return users_stake
             
-    async def _side_pots(self, street_name : str) -> dict:
+    async def _making_side_pots(self, street_name : str) -> dict:
         '''
         종류 : 리턴값이 있는 함수
         기능 : 매 스트릿 종료시 메인팟과 사이드 팟들을 계산해서 반환
@@ -1063,7 +1046,7 @@ class Base:
         else:
             raise ValueError("Sidepot calculation is incorrect.")
 
-    async def _side_pot_award(self, nuts: dict, street_name: str) -> None:
+    async def _side_pots(self, nuts: dict, street_name: str) -> None:
         '''
         종류 : 리턴값이 없는 함수
         기능 : 
@@ -1141,7 +1124,7 @@ class Base:
             print(self.pot_total)
         assert self.pot_total == 0
 
-    async def _ratio_using_ranking_award(self, nuts : dict, street_name : str) -> None:
+    async def _ratio_using_ranking(self, nuts : dict, street_name : str) -> None:
         '''
         종류 : 리턴값이 없는 함수
         기능 : 
@@ -1303,7 +1286,7 @@ class Base:
             print(self.pot_total)
         assert self.pot_total == 0
 
-    async def _side_pot_using_ranking_award(self, nuts : dict, street_name : str) -> None:
+    async def _side_pots_using_ranking(self, nuts : dict, street_name : str) -> None:
         '''
         종류 : 리턴값이 없는 함수
         기능 : 

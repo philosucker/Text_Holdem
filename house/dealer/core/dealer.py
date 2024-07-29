@@ -31,8 +31,6 @@ class Dealer(Base):
         await self._notify_clients_starting_cards()
         await self._broadcast_message("Pot Total", self.pot_total)
 
-        await self._check_connection(self.connections.keys())
-
         # 유저 액선큐 등록
         if self.start_order:
             self.action_queue.append(self.start_order.popleft())
@@ -60,8 +58,6 @@ class Dealer(Base):
         await self._notify_clients_stack_sizes()
         await self._notify_clients_starting_cards()
         await self._broadcast_message("Pot Total", self.pot_total)
-
-        await self._check_connection(self.connections.keys())
 
         # 유저 액선큐 등록
         if self.start_order:
@@ -91,11 +87,11 @@ class Dealer(Base):
             if next(iter(answer)) == "call":
                 await self._call(street_name, current_player)
                 
-            # 클라이언트에게 전달 받은 응답이 {'fold' : None} 면 
+            # 클라이언트에게 전달 받은 응답이 {'fold' : None} 이면 
             elif next(iter(answer)) == "fold":
                 await self._fold(street_name, current_player)
                 
-            # 클라이언트에게 전달 받은 응답이 {'check' : None} 면      
+            # 클라이언트에게 전달 받은 응답이 {'check' : None} 이면      
             elif next(iter(answer)) == "check":  # BB 만 가능
                 await self._check(street_name, current_player)
 
@@ -122,8 +118,6 @@ class Dealer(Base):
                 await self._broadcast_message("Stack Size", self.players[current_player]['stk_size'])
                 await self._broadcast_message("Pot Size", self.pot_total)
 
-            await self._check_connection(self.connections.keys())
-
             # 다음 차례 유저 액션큐 등록
             if self.start_order:
                 self.action_queue.append(self.start_order.popleft())
@@ -143,7 +137,7 @@ class Dealer(Base):
     async def _finishing_street(self, street_name : str ) -> None:
 
         # 사이드팟 생성
-        pots = await self._side_pots(street_name)
+        pots = await self._making_side_pots(street_name)
         self.side_pots[street_name]['pots'] = pots
 
         # 현재 스트릿의 올인 유저 리스트를 전체 올인 리스트에 추가
@@ -265,16 +259,16 @@ class Dealer(Base):
 
         return nuts
 
-    async def _pot_award(self, nuts : dict, street_name : str, version = 'side_pot') -> None:
+    async def _pot_award(self, nuts : dict, street_name : str, version = 'normal') -> None:
 
-        if version == 'side_pot':
-            await self._side_pot_award(nuts, street_name)
+        if version == 'normal':
+            await self._side_pots(nuts, street_name)
 
-        elif version == 'ratio_using_ranking':
-            await self._ratio_using_ranking_award(nuts, street_name)
+        elif version == 'experimental':
+            await self._ratio_using_ranking(nuts, street_name)
         
-        elif version == 'side_pot_using_ranking':
-            await self._side_pot_using_ranking_award(nuts, street_name)
+        elif version == 'hybrid':
+            await self._side_pots_using_ranking(nuts, street_name)
 
         return
 
@@ -351,6 +345,11 @@ class Dealer(Base):
         game_log = await self._making_game_log()
         return game_log
 
+    async def reconnection_handler(self, reconnection : dict[str, WebSocket]) -> None:
+        nick, websocket = list(reconnection.items())[0]
+        if nick in self.connections:
+            del self.connections[nick]
+        self.connections[nick] = websocket
 
 
 
