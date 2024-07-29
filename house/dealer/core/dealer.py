@@ -1,15 +1,11 @@
-import websockets
-import json
+from fastapi import WebSocket
 import asyncio
-import httpx
-import os
-
 from src import Base
 
 class Dealer(Base):
 
-    def __init__(self, table_id : int, user_id_list : list, rings : int, stakes : str, ws_url: str) -> None:
-        super().__init__(table_id, user_id_list, rings, stakes, ws_url)
+    def __init__(self, table_dict : dict, connections : dict[WebSocket]) -> None:
+        super().__init__(table_dict, connections)
 
     ####################################################################################################################################################
     ####################################################################################################################################################
@@ -26,19 +22,17 @@ class Dealer(Base):
 
         '''
         서버 요청 사항
-        1. 모든 클라이언트에게 각자 자신의 스타팅 카드 렌더링 요청
+        1. 모든 클라이언트에게 모든 상대방의 닉과 포지션 렌더링 요청
         2. 모든 클라이언트에게 모든 상대방의 스택사이즈 렌더링 요청.
-        3. 모든 클라이언트에게 팟 총액 렌더링 요청
-        4. 모든 클라이언트에게 start_order 에 있는 유저만 남기고 나머지 유저들 삭제 렌더링 요청
+        3. 모든 클라이언트에게 각자 자신의 스타팅 카드 렌더링 요청
+        4. 모든 클라이언트에게 팟 총액 렌더링 요청
         '''
-        start_order = self.start_order.copy() 
-        await self._notify_clients_starting_cards()
+        await self._notify_clients_nick_positions()
         await self._notify_clients_stack_sizes()
-        await self._notify_clients_pot_size()
-        await self._broadcast_message(f"start_order: {start_order}")
+        await self._notify_clients_starting_cards()
+        await self._broadcast_message("Pot Total", self.pot_total)
 
-
-        await self._check_connection(self, self.websocket_clients.keys())
+        await self._check_connection(self.connections.keys())
         # 유저 액선큐 등록
         if self.start_order:
             self.action_queue.append(self.start_order.popleft())
@@ -55,18 +49,17 @@ class Dealer(Base):
 
         '''
         서버 요청 사항
-        1. 모든 클라이언트에게 커뮤니티 카드 렌더링 요청
+        1. 모든 클라이언트에게 모든 상대방의 닉과 포지션 렌더링 요청
         2. 모든 클라이언트에게 모든 상대방의 스택사이즈 렌더링 요청.
-        3. 모든 클라이언트에게 팟 총액 렌더링 요청
-        4. 모든 클라이언트에게 start_order 에 있는 유저만 남기고 나머지 유저들 삭제 렌더링 요청
+        3. 모든 클라이언트에게 각자 자신의 스타팅 카드 렌더링 요청
+        4. 모든 클라이언트에게 팟 총액 렌더링 요청
         '''
-        start_order = self.start_order.copy() 
-        await self._notify_clients_community_cards(street_name)
+        await self._notify_clients_nick_positions()
         await self._notify_clients_stack_sizes()
-        await self._notify_clients_pot_size()
-        await self._broadcast_message(f"start_order: {start_order}")
+        await self._notify_clients_starting_cards()
+        await self._broadcast_message("Pot Total", self.pot_total)
 
-        await self._check_connection(self, self.websocket_clients.keys())
+        await self._check_connection(self.connections.keys())
         # 유저 액선큐 등록
         if self.start_order:
             self.action_queue.append(self.start_order.popleft())
@@ -74,10 +67,6 @@ class Dealer(Base):
     async def _play_street(self, street_name : str ) -> None:
 
         while self.action_queue:
-
-            current_player = self.action_queue[0]
-            possible_actions : list = await self._possible_actions(street_name, current_player)
-
             '''
             서버 요청 사항 
             시간제한은 클라이언트 쪽에서 구현
@@ -85,14 +74,12 @@ class Dealer(Base):
             2. current_player에 해당하는 클라이언트가 bet, raise, all-in을 할 수 있는 경우 betting_condition 리스트 전달, 렌더링 요청
                 self.prev_VALID 유저가 베팅 액션 선택시 베팅 해야하는 최소 금액
                 self.prev_TOTAL 유저가 레이즈 액션 선택시 가능한 레이즈 최소 금액 렌더링 요청
-            
             '''
+            current_player = self.action_queue[0]
+            possible_actions : list = await self._possible_actions(street_name, current_player)
             for action in possible_actions:
                 if action in ['bet', 'raise', 'all-in']:
                     betting_condition = [self.prev_VALID, self.prev_TOTAL]
-            
-            await self._send_message(self.players[current_player]['user_id'], f"possible_actions: {possible_actions}")
-            await self._send_message(self.players[current_player]['user_id'], f"betting_condition: {betting_condition}")
 
             '''
             서버 응답 대기
@@ -102,9 +89,9 @@ class Dealer(Base):
             {'bet' : bet_amount}, {'raise' : raise_amount} 
             서버로부터 받은 응답을 answer 변수에 할당
             '''
-            async with websockets.connect(f"{self.ws_url}/{current_player}") as websocket:
-                answer = await websocket.recv()
-                answer = json.loads(answer) 
+
+            message = {"Possible Actions" : possible_actions, "Betting Condition" : betting_condition}
+            answer : dict = await self._request_action(current_player, message)
 
             # 클라이언트에게 전달 받은 응답이 call 이면
             if next(iter(answer)) == "call":
@@ -131,14 +118,15 @@ class Dealer(Base):
                 await self._all_in(street_name, current_player, answer)
 
             '''
-            서버 요청 사항
-            1. 모든 클라이언트에게 answer 딕셔너리 전달
-                현재 플레이어의 액션 종류 렌더링 요청
-                각 액션에 따른 팟 금액 변화, 해당 유저의 스택사이즈 변화 렌더링 요청
-            '''
-
-            await self._broadcast_message(f"Action: {answer}")  
-            await self._notify_clients_stack_sizes()  
+            모든 클라이언트들에게 다음을 요청
+            1. 현재 클라이언트의 액션을 렌더링 
+            2. 베팅, 콜, 레이즈, 올인한 클라이언트의 스택 사이즈를 렌더링
+            3. 메인팟 사이즈를 렌더링
+            '''                
+            await self._broadcast_message("Action", answer)
+            if not {"check", "fold"} & answer.keys():
+                await self._broadcast_message("Stack Size", self.players[current_player]['stk_size'])
+                await self._broadcast_message("Pot Size", self.pot_total)
                    
             # 다음 차례 유저 액션큐 등록
             if self.start_order:
@@ -242,13 +230,7 @@ class Dealer(Base):
         community_cards : list = await self._face_up_community_cards_for_showdown(street_name) # _face_up_community_cards_for_showdown 호출 후
         community_cards_open_order : list = await _community_cards_open_order(street_name) #_community_cards_open_order 호출되어야 한다. 호출순서 바뀌면 안됨
         
-        '''
-        현재 딜러인스턴스와 접속이 잘 유지 중인 클라이언트들만 새로운 self.websocket_clients 딕셔너리에 업데이트 하기 위해
-        self._connect_websocket_clients() 를 호출하여  self.websocket_clients 를 새로 업데이트 한후
-        self._check_connection 함수에 인자로 전달해 호출하여 접속이 끊긴 유저는 self.fold_user_total로 이동
-        '''
-        await self._connect_websocket_clients()
-        await self._check_connection(self.websocket_clients) 
+        await self._check_connection(self.connections.keys())
 
         user_cards : dict = await self._face_up_user_hand()
         nuts = await self._compare_hand(user_cards, community_cards)
@@ -259,7 +241,8 @@ class Dealer(Base):
             모든 클라이언트에게 동시에 스타팅 카드 오픈 렌더링 후
             커뮤니티 카드 오픈 렌더링 요청
             '''
-            await self._broadcast_message(f"user_card_open_first : {user_cards}, {community_cards_open_order}")
+            message = {"User Cards" : user_cards, "Community Cards Open Order" : community_cards_open_order}
+            await self._broadcast_message("User Cards Open First", message)
 
         elif self.table_card_open_first and street_name != 'river':
             if self.table_card_open_only:
@@ -267,24 +250,24 @@ class Dealer(Base):
                 서버에 요청
                 모든 클라이언트에 커뮤니티 카드 오픈 렌더링 
                 '''            
-                await self._broadcast_message(f"table_card_open_only : {community_cards_open_order}")
+                await self._broadcast_message("Community Cards Open Order", community_cards_open_order)
             '''
             서버에 요청
             모든 클라이언트에 커뮤니티 카드 오픈 렌더링 후
             유저의 액션 순서대로 스타팅 카드 오픈 렌더링 요청
             '''
-            await self._broadcast_message(f"table_card_open_first: {community_cards_open_order}")
-            for position in self.actioned_queue: 
-                await self._send_message(self.players[position]['user_id'], user_cards)
-
+            await self._broadcast_message("Table Cards Open First", community_cards_open_order)
+            user_cards_open_order = {position: user_cards[position] for position in self.actioned_queue if position in user_cards}
+            await self._broadcast_message("User Cards Open Order", user_cards_open_order)
+        
         elif street_name == 'river':
             if self.river_all_check:
                 '''
                 서버에 요청
                 리버에서 체크했던 순서대로 클라이언트 카드 오픈
                 '''
-                for position in self.check_users:
-                    await self._send_message(self.players[position]['user_id'], user_cards)                
+                user_cards_open_order = {position: user_cards[position] for position in self.check_users if position in user_cards}
+                await self._broadcast_message("User Cards Open Order", user_cards_open_order)         
 
             elif self.river_bet_exists and self.table_card_open_only:
                 '''
@@ -296,8 +279,8 @@ class Dealer(Base):
                 서버에 요청
                 리버에서 마지막으로 베팅액션을 한 클라이언트부터 딜링 방향으로 카드 오픈
                 '''
-                for position in self.actioned_queue:
-                    await self._send_message(self.players[position]['user_id'], user_cards)
+                user_cards_open_order = {position: user_cards[position] for position in self.actioned_queue if position in user_cards}
+                await self._broadcast_message("User Cards Open Order", user_cards_open_order)
 
         return nuts
 
@@ -311,7 +294,6 @@ class Dealer(Base):
         
         elif version == 3:
             await self._pot_award_3(nuts, street_name)
-
 
     ####################################################################################################################################################
     ####################################################################################################################################################
@@ -330,7 +312,6 @@ class Dealer(Base):
             nuts = await self._showdown(street_name)
             await self._pot_award(nuts, street_name, 1)
         else:
-            await self._connect_websocket_clients()
             await self._flop()
     
     async def _flop(self) -> None:
@@ -344,7 +325,6 @@ class Dealer(Base):
             nuts = await self._showdown(street_name)
             await self._pot_award(nuts, street_name, 1)
         else:
-            await self._connect_websocket_clients()
             await self._turn()
     
     async def _turn(self) -> None:
@@ -358,7 +338,6 @@ class Dealer(Base):
             nuts = await self._showdown(street_name)
             await self._pot_award(nuts, street_name, 1)
         else:
-            await self._connect_websocket_clients()
             await self._river()
     
     async def _river(self) -> None:
@@ -381,28 +360,12 @@ class Dealer(Base):
     ####################################################################################################################################################
 
     async def go_street(self) -> None:
-        await self._connect_websocket_clients()
         await self._preFlop()
-        await self._close_websocket_clients()
-        await self.ask_for_next_game()
+        game_log = await self._making_game_log()
+        return game_log
 
-    async def ask_for_next_game(self):
-        for user_id in self.user_id_list:
-            await self._send_message(user_id, "Do you want to stay? (yes/no)")
-        answers = await asyncio.gather(*[self._receive_message(user_id) for user_id in self.user_id_list])
-        if "yes" in answers:
-            await self.report_to_floor(new_game=True)
-        else:
-            await self.report_to_floor(new_game=False)
 
-    async def report_to_floor(self, new_game):
-        async with httpx.AsyncClient() as client:
-            if new_game:
-                await client.post(f"http://{os.getenv('FLOOR_SERVER_URL', 'floor-server.com')}/game_ended", json={"table_id": self.table_id, "keep_playing": True})
-            else:
-                await client.post(f"http://{os.getenv('FLOOR_SERVER_URL', 'floor-server.com')}/game_ended", json={"table_id": self.table_id, "keep_playing": False})
 
-    async def _receive_message(self, user_id):
-        # WebSocket으로부터 메시지 수신 로직
-        pass
+
+
 

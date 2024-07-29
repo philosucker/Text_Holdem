@@ -1,37 +1,41 @@
 import random
-import httpx
 import asyncio
-import websockets
 from itertools import combinations
 from collections import OrderedDict, defaultdict, Counter, deque
+from fastapi import WebSocket
 
 class Base:
     
-    def __init__(self, table_id : int, user_id_list : list, rings : int, stakes : str, ws_url: str) -> None:
-
+    def __init__(self, table_dict : dict, connections : dict[str, WebSocket]) -> None:
         # constants from floor
-        self.table_id = table_id
-        self.user_id_list = user_id_list
-        self.rings = rings
-        self.stakes = stakes
-        self.ws_url = ws_url
-        asyncio.run(self.async_init)
-        asyncio.create_task(self.async_init())
+        '''
+        table_dict = {
+        "table_id" : 00123,
+        "rings" = 6,
+        "stakes" = "low",
+        "new_players" = {"user_nick1" : stk_size, "user_nick2" : stk_size}
+        "continuing_players" = {"user_nick1" : stk_size, "user_nick2" : stk_size}
+        "determined_positions" = {"user_nick1" : position, "user_nick2" : position}
+        }
 
-    async def async_init(self):
-
-        self.stk_size = await self._get_user_stack_sizes(self.user_id_list)
+        connections = {"user_nick1" : websocket, "user_nick2" : web_socket}
+        '''
+        self.table_dict = table_dict
+        self.connections = connections
+        
+        self.rings = table_dict["rings"]
+        self.stakes = table_dict["stakes"]
 
         # variables for initialize players and cards
-        self.shuffled_deck = await self._shuffle_deck()
-        self.players, self.stub, self.user2pos = await self._initialize_players(self.user_id_list, self.stk_size, self.shuffled_deck)
+        self.shuffled_deck = self._shuffle_deck()
+        self.players, self.stub = self._initialize_players(self.table_dict, self.shuffled_deck)
         
         # variables for initialize street
         self.start_order : deque = None
-        self.SB, self.BB = await self._blind_post()
-        await self._initialize_betting_state()
-        await self._initialize_action_state()
-        await self._initialize_conditions()
+        self.SB, self.BB = self._blind_post()
+        self._initialize_betting_state()
+        self._initialize_action_state()
+        self._initialize_conditions()
 
         # variable for end_condition, finishing_street, face_up_user_hand
         self.all_in_users_total = OrderedDict()
@@ -58,62 +62,19 @@ class Base:
         self.side_pots["river"] = {}
 
         # variables for logging
+        self.game_log = {}
         self.log_best_hands = OrderedDict()
         self.log_users_ranking = None 
         self.log_pot_change = [self.pot_total]
         self.log_hand_actions = {"pre_flop" : [], "flop" : [], "turn" : [], "river" : []}    
 
-    '''
-    FastAPI manager 서버에서 SQL DB에 있는 각 유저아이디에 해당하는 스택사이즈를 요청하여
-    유저아이디를 키, 스택사이즈 밸류로 하는 딕셔너리를 만들어 self.stk_size 변수에 할당하기 위해 호출되는 함수
-    '''
-    async def _get_user_stack_sizes(self, user_id_list):
-        manager_server_url = "http://manager:8000"  # manager 서버의 URL과 포트를 환경에 맞게 설정
-        async with httpx.AsyncClient() as client:
-            tasks = [client.get(f"{manager_server_url}/stk_size/{user_id}") for user_id in user_id_list]
-            responses = await asyncio.gather(*tasks)
-            return {response.json()['user_id']: response.json()['stack_size'] for response in responses}
-        
-    async def _connect_websocket_clients(self):
-        async def connect(user_id):
-            uri = f"{self.ws_url}/{user_id}"
-            self.websocket_clients[user_id] = await websockets.connect(uri)
-        
-        await asyncio.gather(*[connect(user_id) for user_id in self.user_id_list])
-
-    async def _send_message(self, user_id, message):
-        if user_id in self.websocket_clients:
-            await self.websocket_clients[user_id].send(message)
-
-    async def _broadcast_message(self, message):
-        await asyncio.gather(*[client.send(message) for client in self.websocket_clients.values()])
-
-    async def _close_websocket_clients(self):
-        await asyncio.gather(*[client.close() for client in self.websocket_clients.values()])
-
-    async def _notify_clients_starting_cards(self):
-        users_starting_cards = {user_id: self.players[position]['starting_cards'] for position, user_id in self.user2pos.items()}
-        for user_id in self.user2pos.keys():
-            starting_cards = users_starting_cards[user_id]
-            await self._send_message(user_id, f'starting_cards : {starting_cards}')
-
-    async def _notify_clients_stack_sizes(self):
-        users_stack_size = {user_id : self.players[position]['stk_size'] for position, user_id in self.user2pos.items()}
-        await self._broadcast_message(f"stk_size : {users_stack_size}")
-
-    async def _notify_clients_pot_size(self):
-        await self._broadcast_message(f"pot_total : {self.pot_total}")
-
-    async def _notify_clients_community_cards(self, street_name):
-        community_cards = await self._face_up_community_cards(street_name)
-        await self._broadcast_message(f"community_cards : {community_cards}")
     ####################################################################################################################################################
     ####################################################################################################################################################
     #                                                            INITIALIZE CARDS, PLAYERS                                                             #
     ####################################################################################################################################################
     #################################################################################################################################################### 
    
-    async def _get_positions(self, rings : int) -> list:
+    def _get_positions(self, rings : int) -> list:
         
         if rings == 6:
             return ["UTG", "HJ", "CO", "D", "SB", "BB"]
@@ -122,13 +83,13 @@ class Base:
         else:
             raise ValueError("Invalid number of rings. Must be 6 or 9.")
 
-    async def _shuffle_positions(self, positions : list) -> list: 
+    def _shuffle_positions(self, positions : list) -> list: 
         
         shuffled_positions = random.sample(positions, len(positions))
         
         return shuffled_positions
 
-    async def _shuffle_deck(self) -> list:
+    def _shuffle_deck(self) -> list:
 
         ranks = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
         suits = ['H', 'D', 'C', 'S'] 
@@ -137,33 +98,293 @@ class Base:
 
         return shuffled_deck
     
-    async def _dealing_cards(self, players : dict, shuffled_deck : list) -> tuple[dict, list]:
+    def _dealing_cards(self, players : dict, shuffled_deck : list) -> tuple[dict, list]:
         for _ in range(2):
             for position in players:
                 players[position]['starting_cards'].append(shuffled_deck.pop(0))
 
         return players, shuffled_deck
 
-    async def _initialize_players(self, user_id_list : list, stk_size : list, shuffled_deck : list) -> tuple[dict, list, dict]:
+    def _initialize_players(self, table_dict : dict, shuffled_deck : list) -> tuple[dict, list]:
+        # TDA Rule 7 : Random Correct Seating
         positions = self._shuffle_positions(self._get_positions(self.rings))
-        user2pos = {user_id: position for position, user_id in zip(positions, user_id_list)}
-        players = {position: {
-            "user_id": user_id,
-            "stk_size": stk_size[user_id],
-            "starting_cards": [],
-            "actions": {
-                street: {"action_list": [], 
+        determined_positions = set(table_dict["determined_positions"].values())
+        positions = [pos for pos in positions if pos not in determined_positions]
+
+        def _create_player_data(user_nick, stk_size):
+            return {
+                "user_nick": user_nick,
+                "stk_size": stk_size,
+                "starting_cards": [],
+                "actions": {
+                    street: {
+                        "action_list": [],
                         "pot_contribution": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]},
                         "betting_size_total": {"call": [0], "raise": [0], "all-in": [0], "bet": [0]},
-                        }
-                for street in ["pre_flop", "flop", "turn", "river"]
+                    } for street in ["pre_flop", "flop", "turn", "river"]
+                }
             }
-        } for position, user_id in zip(positions, user_id_list)}
+
+        players = {}
+        all_players = {**table_dict["new_players"], **table_dict["continuing_players"]}
+
+        for user_nick, stk_size in all_players.items():
+            position = table_dict["determined_positions"].get(user_nick)
+            if position is None:
+                position = positions.pop(0)
+            players[position] = _create_player_data(user_nick, stk_size)
+
+        players, stub = self._dealing_cards(players, shuffled_deck)
+
+        return players, stub
         
-        players, stub = await self._dealing_cards(players, shuffled_deck)
+    ####################################################################################################################################################
+    ####################################################################################################################################################
+    #                                                                  AUXILIARY ETC                                                                   #
+    ####################################################################################################################################################
+    ####################################################################################################################################################
 
-        return players, stub, user2pos
+    async def _blind_post(self) -> (int):
+        '''
+        종류 : 상태변경함수
+        기능 : 변수 초기화
+        목적 : 프리플롭 진행 전 스테이크에 따른 블라인드 값 초기화
+        '''
+        if self.stakes == "low":
+            sb = 1
+            bb = 2
+        elif self.stakes == "high":
+            sb = 2
+            bb = 5
 
+        return sb, bb
+    
+    async def _posting_blind(self, street_name: str) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : 변수 초기화
+        목적 : 프리플롭 진행 전 블라인드 포스팅 및 players 딕셔너리에 SB, BB 유저 액션 기록   
+        '''
+        self.players["SB"]["stk_size"] -= self.SB
+        self.players["BB"]["stk_size"] -= self.BB
+        self.players['SB']["actions"][street_name]["betting_size_total"]['bet'].append(self.SB)
+        self.players['SB']["actions"][street_name]['pot_contribution']['bet'].append(self.SB) 
+        self.players['SB']["actions"][street_name]["action_list"].append('bet')
+        self.players['BB']["actions"][street_name]["betting_size_total"]['bet'].append(self.BB)
+        self.players['BB']["actions"][street_name]['pot_contribution']['bet'].append(self.BB) 
+        self.players['BB']["actions"][street_name]["action_list"].append('bet')    
+        self.pot_total += (self.SB + self.BB)
+        # 시스템 로그. 유저 액션 기록
+        self.log_hand_actions[street_name].append(("SB", {"bet" : self.SB}))
+        self.log_hand_actions[street_name].append(("BB", {"bet" : self.BB}))
+
+    async def _initialize_start_order(self, street_name : str) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : 변수 초기화
+        목적 : 스트릿 진행 전 start_order 초기화, 참가 자격이 있는 유저만 start_order 에 등록        
+        '''
+        if street_name == 'pre_flop':
+            if self.rings == 6:
+                self.start_order = deque(["UTG", "HJ", "CO", "D", "SB", "BB"])
+            elif self.rings == 9:
+                self.start_order = deque(['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB'])
+        else:
+            if self.rings == 6:
+                self.start_order = deque(["SB", "BB", "UTG", "HJ", "CO", "D"])
+            elif self.rings == 9:
+                self.start_order = deque(['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D'])
+            new_order = []
+            while self.start_order:
+                position = self.start_order.popleft()
+                if position in self.survivors:
+                    new_order.append(position)
+            self.start_order = deque(new_order)
+
+    def _initialize_betting_state(self) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : 변수 초기화
+        목적 : 풀콜, 풀레이즈, 풀올인 여부 판단을 위한 정보 제공
+
+        self.raised_total : 클라이언트로부터 전달받는 데이터, 레이즈 총량
+        self.bet_amount : 클라이언트로부터 전달받는 데이터, 벳 금액
+        self.all_in_amount : 올인 금액, 플레이어 스택사이즈 조회   
+        self.LPFB = self.BB : the largest prior full bet = the last legal increment = minimum raise, 최초 LPFB는 BB
+        self.prev_VALID : 콜 액션시 유저의 스택에 남아 있어야 하는 최소 스택 사이즈의 기준
+        self.prev_TOTAL = self.prev_VALID + self.LPFB : 레이즈 액션시 유저의 스택에 남아있어야 하는 최소 스택 사이즈의 기준
+        '''            
+        self.raised_total = 0
+        self.bet_amount = 0 
+        self.all_in_amount = 0   
+
+        self.LPFB = self.BB 
+        self.prev_VALID = self.BB  
+        self.prev_TOTAL = self.prev_VALID + self.LPFB
+
+    def _initialize_action_state(self) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : 리스트 초기화, flag 설정 및 변경
+        목적 : 
+
+        self.attack_flag : possible action 을 결정하기 위한 정보 제공
+        self.raise_counter : 5번을 초과해 레이즈 할 수 없도록 레이즈 수를 카운트하기 위한 변수 
+        self.reorder_flag : 언더콜인 올인 발생시 start_order 재정렬 금지하기 위한 플래그
+        '''    
+        self.action_queue = deque([])
+        self.actioned_queue = deque([])
+
+        self.all_in_users = list()
+        self.fold_users = list()
+        self.check_users = list()
+
+        self.attack_flag = False # only only and just once bet, raise, all-in is True  # 플롭부터는 False로 초기화
+        self.raise_counter = 0 
+        self.reorder_flag = True # 
+
+    def _initialize_conditions(self) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : flag 설정 및 변경
+        목적 : 핸드 조기종료, 쇼다운 시 카드 오픈 순서 정보 제공, 스트릿 이동시 live hands 전달
+
+        self.survivors : 다음 스트릿으로 갈 생존자 리스트
+        '''
+        self.deep_stack_user_counter = 0
+        self.short_stack_end_flag = False  # TDA Rule 16 : Face Up for All
+        self.user_card_open_first = False # TDA Rule 16 : Face Up for All
+
+        self.table_card_open_first = False
+        self.table_card_open_only = False # TDA Rule 18 : Asking to See a Hand
+
+        self.river_all_check = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
+        self.river_bet_exists = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
+
+        self.survivors = list()
+
+    async def _check_connection(self, on_user_list : list) -> None:
+        '''
+        종류 : 상태변경함수
+        기능 : 현재 접속중이지 않은 유저들을 fold_users_total 로 이동
+        목적 : 접속 중인 유저를 대상으로 하는 연산에서 제외
+
+        on_user_list : 서버에서 전달 받은 현재 접속 중인 클라이언트들의 유저 아이디 리스트
+        '''
+        # 만약 게임 도중에 접속이 끊긴 경우 해당유저는 폴드처리를 해야할 뿐만 아니라 start_order 에서도 제외 시켜야 한다. 그렇지 않으면 게임 종료되지 않을 수 있음
+        connected_users = []
+        if on_user_list:
+            for on_user in on_user_list:
+                connected_users.append(on_user)
+            for position in self.start_order:
+                if position not in connected_users:
+                    self.fold_users_total[position] = self.start_order.popleft()
+
+    async def _next_position(self, position):
+        if self.rings == 6:
+            position_list = ["UTG", "HJ", "CO", "D", "SB", "BB"]
+        else:
+            position_list = ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB']
+
+        try:
+            index = position_list.index(position)
+        except ValueError:
+            return None
+
+        next_index = (index + 1) % len(position_list)
+        return position_list[next_index]
+    
+    async def _ask_for_next_game(self) -> dict:
+        message = "Do you want to continue playing at the current table? (Yer or No)"
+        # 클라이언트쪽에서 {답변 : {닉네임 : 포지션}} 딕셔너리로 응답하도록 한 후 
+        # 여기서 yes로 응답한 유저들의 포지션을 시계방향을 한 칸씩 이동한 후 
+        # table_dict에 continuing_players와 determined_positions에 업데이트 한후 리턴한다
+        answers : list[dict[str, dict[str, str]]] = await self._gather_response(message)
+        #  [{"Yes": {"Player1": "UTG"}}, {"Yes" : {"Player2": "HJ"}}, {"No": {"Player3": "CO"}}]
+        result = {}
+        for answer in answers:
+            response, details = list(answer.items())[0]  # 응답과 세부 사항 추출
+            if response.lower() == "yes":
+                for user_nick, position in details.items():
+                    next_position = await self._next_position(position)
+                    result[user_nick] = next_position
+
+        return result
+
+    async def _making_game_log(self):
+        determined_positions : dict = await self._ask_for_next_game()
+        continuing_players :dict = {user_nick : self.players[user_nick]['stk_size'] for user_nick in determined_positions}
+
+        self.game_log["table_id"] = self.table_dict["table_id"]
+        self.game_log["dertermined_positions"] = determined_positions
+        self.game_log["continuing_players"] = continuing_players
+        self.game_log["log_players"] = self.players
+        self.game_log["log_side_pots"] = self.side_pots
+        self.game_log["log_pot_change"] = self.log_pot_change 
+        self.game_log["log_hand_actions"] = self.log_hand_actions  # 매 스트릿 일어난 모든 액션들의 내용을 일어난 순서대로 기록
+        self.game_log["log_best_hands"] = self.log_best_hands  # 쇼다운 결과 각 유저의 베스트 핸즈
+        self.game_log["log_nuts"] = self.log_nuts # 쇼다운 결과 넛츠
+        self.game_log["log_users_ranking"] = self.log_users_ranking # 쇼다운 결과 핸즈 랭킹
+
+        return self.game_log
+    
+    ####################################################################################################################################################
+    ####################################################################################################################################################
+    #                                                                      MESSAGING                                                                   #
+    ####################################################################################################################################################
+    #################################################################################################################################################### 
+
+    async def _broadcast_message(self, title : str, data :dict):
+        message = {title : data}
+        await asyncio.gather(*[client_web_socket.send_json(message) for client_web_socket in self.connections.values()])
+    
+    async def _notify_clients_nick_positions(self):
+        users_position_nick = {position : self.players[position]["user_nick"] for position in self.players}
+        await self._broadcast_message("Position : Nick", users_position_nick)
+
+    async def _notify_clients_stack_sizes(self):
+        users_stack_size = {position : self.players[position]['stk_size'] for position in self.players}
+        await self._broadcast_message("Position : Stack Size", users_stack_size)
+
+    async def _notify_clients_starting_cards(self):
+        tasks = []
+        for position, websocket in self.connections.items():
+            starting_cards = self.players[position]["starting_cards"]
+            message = {"Starting Cards": starting_cards}
+            tasks.append(websocket.send_json(message))
+        await asyncio.gather(*tasks)
+
+    async def _notify_clients_community_cards(self, street_name : str):
+        community_cards = await self._face_up_community_cards(street_name)
+        await self._broadcast_message("Community Cards", community_cards)
+
+    async def _gather_response(self, message : str, timeout=10)-> list[dict[str, dict[str, str]]]:
+        # 각 클라이언트에게 메시지를 보내고, 그들의 응답을 기다림
+        responses = await asyncio.gather(
+            *[await self._send_and_receive(websocket, message, timeout) for websocket in self.connections.values()],
+            return_exceptions=True  # 예외도 결과로 포함
+        )
+        return responses
+
+    async def _send_and_receive(self, message : str, websocket : WebSocket, timeout)-> dict:
+        try:
+            # 메시지를 송신
+            await websocket.send(message)
+            # 클라이언트의 응답을 지정된 시간 안에 수신
+            response = await asyncio.wait_for(websocket.receive_json(), timeout=timeout)
+            return response
+        except asyncio.TimeoutError:
+            # 타임아웃 발생 시, 적절한 메시지를 반환
+            return {"Error": "No response received in time"}
+        except Exception as e:
+            # 기타 에러 발생 시, 에러 메시지를 반환
+            return {"Error": str(e)}
+
+    async def _request_action(self, current_player: str, message: dict):
+        websocket : WebSocket = self.connections[current_player]
+        await websocket.send_json(message)
+        action = await websocket.receive_json()
+        return action
     ####################################################################################################################################################
     ####################################################################################################################################################
     #                                                                      ACTION                                                                      #
@@ -249,7 +470,6 @@ class Base:
 
         self.attack_flag = True 
 
-
         # 현재 베팅 액션으로 인해 스택사이즈가 0이 되었다면 해당 베팅은 올인으로 간주
         if self.players[current_player]["stk_size"] == 0:
             self.all_in_users.append(self.action_queue.popleft())
@@ -261,16 +481,6 @@ class Base:
         
         if self.action_queue:
             self.actioned_queue.append(self.action_queue.popleft())
-
-        '''
-        모든 클라이언트들에게 다음을 요청
-        베팅한 클라이언트의 스택 사이즈를 self.bet_amount 만큼 차감한 결과로 렌더링
-        메인팟 사이즈를 self.bet_amount을 더한 결과로 렌더링
-        '''
-        stk_size = self.players[current_player]['stk_size']
-        await self._broadcast_message(f"current_player_action : {answer}")
-        await self._broadcast_message(f"current_player_stk_size :{stk_size}")
-        await self._notify_clients_pot_size()
 
     async def _call(self, street_name : str, current_player : str, answer : dict) -> None:
 
@@ -304,7 +514,6 @@ class Base:
         self.pot_total += call_amount # 팟 총액 업데이트
 
         self.log_pot_change.append(self.prev_VALID)  # 팟 변화량 업데이트
- 
 
         # 로그 업데이트
         betting_size_total["call"].append(self.prev_VALID)
@@ -316,16 +525,6 @@ class Base:
             self.all_in_users.append(self.action_queue.popleft())
         else:
             self.actioned_queue.append(self.action_queue.popleft())
-
-        '''
-        모든 클라이언트들에게 다음을 요청
-        콜한 클라이언트의 스택 사이즈를 self.prev_VALID 만큼 차감한 결과로 렌더링
-        메인팟 사이즈를 prev_VALID을 더한 결과로 렌더링
-        '''
-        stk_size = self.players[current_player]['stk_size']
-        await self._broadcast_message(f"current_player_action : {answer}")
-        await self._broadcast_message(f"current_player_stk_size :{stk_size}")
-        await self._notify_clients_pot_size()
 
     async def _raise(self, street_name : str, current_player : str, answer : dict) -> None:
 
@@ -378,16 +577,6 @@ class Base:
         
         if self.action_queue:
             self.actioned_queue.append(self.action_queue.popleft())
-        
-        '''
-        모든 클라이언트들에게 다음을 요청
-        레이즈한 클라이언트의 스택 사이즈를 raised_total 만큼 차감한 결과로 렌더링
-        메인팟 사이즈를 raised_total을 더한 결과로 렌더링
-        '''
-        stk_size = self.players[current_player]['stk_size']
-        await self._broadcast_message(f"current_player_action : {answer}")
-        await self._broadcast_message(f"current_player_stk_size :{stk_size}")
-        await self._notify_clients_pot_size()
 
     async def _all_in(self, street_name : str, current_player : str, answer : dict) -> None:
 
@@ -396,7 +585,7 @@ class Base:
 
         betting_size_total = self.players[current_player]["actions"][street_name]["betting_size_total"]
         pot_contribution = self.players[current_player]["actions"][street_name]["pot_contribution"]        
-        action_list = self.players[current_player]["actions"][street_name]["action_list"]
+        action_list : list = self.players[current_player]["actions"][street_name]["action_list"]
 
         '''
         모든 클라이언트들에게 다음을 요청
@@ -449,16 +638,6 @@ class Base:
 
         self.all_in_users.append(self.action_queue.popleft())
 
-        '''
-        모든 클라이언트들에게 다음을 요청
-        올인한 클라이언트의 스택 사이즈를 self.all_in_amount 만큼 차감한 결과로 렌더링
-        메인팟 사이즈를 self.all_in_amount을 더한 결과로 렌더링
-        '''
-        stk_size = self.players[current_player]['stk_size']
-        await self._broadcast_message(f"current_player_action : {answer}")
-        await self._broadcast_message(f"current_player_stk_size :{stk_size}")
-        await self._notify_clients_pot_size()
-
         # 딥스택 유저 수 부족으로 인한 핸드 종료조건
         for position in self.start_order:
             if self.prev_VALID <= self.players[position]['stk_size']:
@@ -475,11 +654,6 @@ class Base:
         self.players[current_player]["actions"][street_name]["action_list"].append(last_action)
         self.actioned_queue.append(current_player)
         self.check_users.append(self.action_queue.popleft())
-        '''
-        모든 클라이언트들에게 다음을 요청
-        체크한 플레이어가 체크했음을 렌더링       
-        '''
-        await self._broadcast_message(f"current_player_action : {answer}")
 
     async def _fold(self, street_name : str, current_player : str, answer : dict) -> None:
 
@@ -489,11 +663,7 @@ class Base:
         last_action = "fold"
         self.players[current_player]["actions"][street_name]["action_list"].append(last_action)
         self.fold_users.append(self.action_queue.popleft())
-        '''
-        모든 클라이언트들에게 다음을 요청
-        폴드한 플레이어가 폴드했음을 렌더링       
-        '''
-        await self._broadcast_message(f"current_player_action : {answer}")
+    
     ####################################################################################################################################################
     ####################################################################################################################################################
     #                                                                AUXILIARY SHOWDOWN                                                                #
@@ -1290,147 +1460,3 @@ class Base:
         if not self.pot_total == 0:
             print(self.pot_total)
         assert self.pot_total == 0
-    ####################################################################################################################################################
-    ####################################################################################################################################################
-    #                                                                  AUXILIARY ETC                                                                   #
-    ####################################################################################################################################################
-    ####################################################################################################################################################
-
-    async def _blind_post(self) -> (int):
-        '''
-        종류 : 상태변경함수
-        기능 : 변수 초기화
-        목적 : 프리플롭 진행 전 스테이크에 따른 블라인드 값 초기화
-        '''
-        if self.stakes == "low":
-            sb = 1
-            bb = 2
-        elif self.stakes == "high":
-            sb = 2
-            bb = 5
-
-        return sb, bb
-    
-    async def _posting_blind(self, street_name: str) -> None:
-        '''
-        종류 : 상태변경함수
-        기능 : 변수 초기화
-        목적 : 프리플롭 진행 전 블라인드 포스팅 및 players 딕셔너리에 SB, BB 유저 액션 기록   
-        '''
-        self.players["SB"]["stk_size"] -= self.SB
-        self.players["BB"]["stk_size"] -= self.BB
-        self.players['SB']["actions"][street_name]["betting_size_total"]['bet'].append(self.SB)
-        self.players['SB']["actions"][street_name]['pot_contribution']['bet'].append(self.SB) 
-        self.players['SB']["actions"][street_name]["action_list"].append('bet')
-        self.players['BB']["actions"][street_name]["betting_size_total"]['bet'].append(self.BB)
-        self.players['BB']["actions"][street_name]['pot_contribution']['bet'].append(self.BB) 
-        self.players['BB']["actions"][street_name]["action_list"].append('bet')    
-        self.pot_total += (self.SB + self.BB)
-        # 시스템 로그. 유저 액션 기록
-        self.log_hand_actions[street_name].append(("SB", {"bet" : self.SB}))
-        self.log_hand_actions[street_name].append(("BB", {"bet" : self.BB}))
-
-    async def _initialize_start_order(self, street_name : str) -> None:
-        '''
-        종류 : 상태변경함수
-        기능 : 변수 초기화
-        목적 : 스트릿 진행 전 start_order 초기화, 참가 자격이 있는 유저만 start_order 에 등록        
-        '''
-        if street_name == 'pre_flop':
-            if self.rings == 6:
-                self.start_order = deque(["UTG", "HJ", "CO", "D", "SB", "BB"])
-            elif self.rings == 9:
-                self.start_order = deque(['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D', 'SB', 'BB'])
-        else:
-            if self.rings == 6:
-                self.start_order = deque(["SB", "BB", "UTG", "HJ", "CO", "D"])
-            elif self.rings == 9:
-                self.start_order = deque(['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'D'])
-            new_order = []
-            while self.start_order:
-                position = self.start_order.popleft()
-                if position in self.survivors:
-                    new_order.append(position)
-            self.start_order = deque(new_order)
-
-    async def _initialize_betting_state(self) -> None:
-        '''
-        종류 : 상태변경함수
-        기능 : 변수 초기화
-        목적 : 풀콜, 풀레이즈, 풀올인 여부 판단을 위한 정보 제공
-
-        self.raised_total : 클라이언트로부터 전달받는 데이터, 레이즈 총량
-        self.bet_amount : 클라이언트로부터 전달받는 데이터, 벳 금액
-        self.all_in_amount : 올인 금액, 플레이어 스택사이즈 조회   
-        self.LPFB = self.BB : the largest prior full bet = the last legal increment = minimum raise, 최초 LPFB는 BB
-        self.prev_VALID : 콜 액션시 유저의 스택에 남아 있어야 하는 최소 스택 사이즈의 기준
-        self.prev_TOTAL = self.prev_VALID + self.LPFB : 레이즈 액션시 유저의 스택에 남아있어야 하는 최소 스택 사이즈의 기준
-        '''            
-        self.raised_total = 0
-        self.bet_amount = 0 
-        self.all_in_amount = 0   
-
-        self.LPFB = self.BB 
-        self.prev_VALID = self.BB  
-        self.prev_TOTAL = self.prev_VALID + self.LPFB
-
-    async def _initialize_action_state(self) -> None:
-        '''
-        종류 : 상태변경함수
-        기능 : 리스트 초기화, flag 설정 및 변경
-        목적 : 
-
-        self.attack_flag : possible action 을 결정하기 위한 정보 제공
-        self.raise_counter : 5번을 초과해 레이즈 할 수 없도록 레이즈 수를 카운트하기 위한 변수 
-        self.reorder_flag : 언더콜인 올인 발생시 start_order 재정렬 금지하기 위한 플래그
-        '''    
-        self.action_queue = deque([])
-        self.actioned_queue = deque([])
-
-        self.all_in_users = list()
-        self.fold_users = list()
-        self.check_users = list()
-
-        self.attack_flag = False # only only and just once bet, raise, all-in is True  # 플롭부터는 False로 초기화
-        self.raise_counter = 0 
-        self.reorder_flag = True # 
-
-    async def _initialize_conditions(self) -> None:
-        '''
-        종류 : 상태변경함수
-        기능 : flag 설정 및 변경
-        목적 : 핸드 조기종료, 쇼다운 시 카드 오픈 순서 정보 제공, 스트릿 이동시 live hands 전달
-
-        self.survivors : 다음 스트릿으로 갈 생존자 리스트
-        '''
-        self.deep_stack_user_counter = 0
-        self.short_stack_end_flag = False  # TDA Rule 16 : Face Up for All
-        self.user_card_open_first = False # TDA Rule 16 : Face Up for All
-
-        self.table_card_open_first = False
-        self.table_card_open_only = False # TDA Rule 18 : Asking to See a Hand
-
-        self.river_all_check = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
-        self.river_bet_exists = False # TDA Rule : 17 : Non All-In Showdowns and Showdown Order
-
-        self.survivors = list()
-
-        self.websocket_clients = {}
-
-    async def _check_connection(self, on_user_list : list) -> None:
-        '''
-        종류 : 상태변경함수
-        기능 : 현재 접속중이지 않은 유저들을 fold_users_total 로 이동
-        목적 : 접속 중인 유저를 대상으로 하는 연산에서 제외
-
-        on_user_list : 서버에서 전달 받은 현재 접속 중인 클라이언트들의 유저 아이디 리스트
-        '''
-        # 만약 게임 도중에 접속이 끊긴 경우 해당유저는 폴드처리를 해야할 뿐만 아니라 start_order 에서도 제외 시켜야 한다. 그렇지 않으면 게임 종료되지 않을 수 있음
-        connected_users = []
-        if on_user_list:
-            for on_user in on_user_list:
-                connected_users.append(self.user2pos[on_user])
-            for position in self.start_order:
-                if position not in connected_users:
-                    self.fold_users_total[position] = self.start_order.popleft()
-
