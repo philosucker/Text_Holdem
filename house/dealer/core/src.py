@@ -99,7 +99,8 @@ class Base:
     def _dealing_cards(self, players : dict, shuffled_deck : list) -> tuple[dict, list]:
         for _ in range(2):
             for position in players:
-                players[position]['starting_cards'].append(shuffled_deck.pop(0))
+                starting_cards : list = players[position]['starting_cards']
+                starting_cards.append(shuffled_deck.pop(0))
 
         return players, shuffled_deck
 
@@ -109,7 +110,7 @@ class Base:
         determined_positions = set(table_dict["determined_positions"].values())
         positions = [pos for pos in positions if pos not in determined_positions]
 
-        def _create_player_data(user_nick, stk_size):
+        def _create_player_data(user_nick : str, stk_size : int) -> dict:
             return {
                 "user_nick": user_nick,
                 "stk_size": stk_size,
@@ -142,7 +143,7 @@ class Base:
     ####################################################################################################################################################
     ####################################################################################################################################################
 
-    async def _blind_post(self) -> (int):
+    async def _blind_post(self) -> tuple[int, int]:
         '''
         종류 : 상태변경함수
         기능 : 변수 초기화
@@ -294,14 +295,11 @@ class Base:
     
     async def _ask_for_next_game(self) -> dict:
         message = "Do you want to continue playing at the current table? (Yer or No)"
-        # 클라이언트쪽에서 {답변 : {닉네임 : 포지션}} 딕셔너리로 응답하도록 한 후 
-        # 여기서 yes로 응답한 유저들의 포지션을 시계방향을 한 칸씩 이동한 후 
-        # table_dict에 continuing_players와 determined_positions에 업데이트 한후 리턴한다
         answers : list[dict[str, dict[str, str]]] = await self._gather_response(message)
         #  [{"Yes": {"Player1": "UTG"}}, {"Yes" : {"Player2": "HJ"}}, {"No": {"Player3": "CO"}}]
         result = {}
         for answer in answers:
-            response, details = list(answer.items())[0]  # 응답과 세부 사항 추출
+            response, details = list(answer.items())[0]
             if response.lower() == "yes":
                 for user_nick, position in details.items():
                     next_position = await self._next_position(position)
@@ -309,7 +307,7 @@ class Base:
 
         return result
 
-    async def _making_game_log(self):
+    async def _making_game_log(self) -> dict:
         determined_positions : dict = await self._ask_for_next_game()
         continuing_players :dict = {user_nick : self.players[user_nick]['stk_size'] for user_nick in determined_positions}
 
@@ -333,19 +331,19 @@ class Base:
     ####################################################################################################################################################
     #################################################################################################################################################### 
 
-    async def _broadcast_message(self, title : str, data :dict):
+    async def _broadcast_message(self, title : str, data :dict) -> None:
         message = {title : data}
         await asyncio.gather(*[client_web_socket.send_json(message) for client_web_socket in self.connections.values()])
     
-    async def _notify_clients_nick_positions(self):
+    async def _notify_clients_nick_positions(self) -> None:
         users_position_nick = {position : self.players[position]["user_nick"] for position in self.players}
         await self._broadcast_message("Position : Nick", users_position_nick)
 
-    async def _notify_clients_stack_sizes(self):
+    async def _notify_clients_stack_sizes(self) -> None:
         users_stack_size = {position : self.players[position]['stk_size'] for position in self.players}
         await self._broadcast_message("Position : Stack Size", users_stack_size)
 
-    async def _notify_clients_starting_cards(self):
+    async def _notify_clients_starting_cards(self) -> None:
         tasks = []
         for position, websocket in self.connections.items():
             starting_cards = self.players[position]["starting_cards"]
@@ -353,37 +351,37 @@ class Base:
             tasks.append(websocket.send_json(message))
         await asyncio.gather(*tasks)
 
-    async def _notify_clients_community_cards(self, street_name : str):
+    async def _notify_clients_community_cards(self, street_name : str) -> None:
         community_cards = await self._face_up_community_cards(street_name)
         await self._broadcast_message("Community Cards", community_cards)
 
-    async def _gather_response(self, message : str, timeout=10)-> list[dict[str, dict[str, str]]]:
-        # 각 클라이언트에게 메시지를 보내고, 그들의 응답을 기다림
+    async def _gather_response(self, message : str, timeout=5)-> list[dict[str, dict[str, str]]]:
         responses = await asyncio.gather(
             *[await self._send_and_receive(websocket, message, timeout) for websocket in self.connections.values()],
-            return_exceptions=True  # 예외도 결과로 포함
+            return_exceptions=True 
         )
         return responses
 
     async def _send_and_receive(self, message : str, websocket : WebSocket, timeout)-> dict:
         try:
-            # 메시지를 송신
             await websocket.send(message)
-            # 클라이언트의 응답을 지정된 시간 안에 수신
             response = await asyncio.wait_for(websocket.receive_json(), timeout=timeout)
             return response
         except asyncio.TimeoutError:
-            # 타임아웃 발생 시, 적절한 메시지를 반환
             return {"Error": "No response received in time"}
         except Exception as e:
-            # 기타 에러 발생 시, 에러 메시지를 반환
             return {"Error": str(e)}
 
-    async def _request_action(self, current_player: str, message: dict):
-        websocket : WebSocket = self.connections[current_player]
-        await websocket.send_json(message)
-        action = await websocket.receive_json()
-        return action
+    async def _request_action(self, current_player: str, message: dict, timeout=15) -> dict:
+        try:
+            websocket : WebSocket = self.connections[current_player]
+            await websocket.send_json(message)
+            action = asyncio.wait_for(websocket.receive_json(), timeout=timeout)
+            return action
+        except asyncio.TimeoutError:
+            return {'fold' : None} 
+        except Exception as e:
+            return {"Error": str(e)}
     ####################################################################################################################################################
     ####################################################################################################################################################
     #                                                                      ACTION                                                                      #
@@ -481,7 +479,7 @@ class Base:
         if self.action_queue:
             self.actioned_queue.append(self.action_queue.popleft())
 
-    async def _call(self, street_name : str, current_player : str, answer : dict) -> None:
+    async def _call(self, street_name : str, current_player : str) -> None:
 
         if current_player in self.check_users:
             self.check_users.remove(current_player)
@@ -577,7 +575,7 @@ class Base:
         if self.action_queue:
             self.actioned_queue.append(self.action_queue.popleft())
 
-    async def _all_in(self, street_name : str, current_player : str, answer : dict) -> None:
+    async def _all_in(self, street_name : str, current_player : str) -> None:
 
         if current_player in self.check_users:
             self.check_users.remove(current_player)
@@ -648,13 +646,13 @@ class Base:
         if self.deep_stack_user_counter < 2:
             self.short_stack_end_flag == True
         
-    async def _check(self, street_name : str, current_player : str, answer : dict) -> None:
+    async def _check(self, street_name : str, current_player : str) -> None:
         last_action = "check"
         self.players[current_player]["actions"][street_name]["action_list"].append(last_action)
         self.actioned_queue.append(current_player)
         self.check_users.append(self.action_queue.popleft())
 
-    async def _fold(self, street_name : str, current_player : str, answer : dict) -> None:
+    async def _fold(self, street_name : str, current_player : str) -> None:
 
         if current_player in self.check_users: # 체크했던 유저가 폴드할 수도 있다.
             self.check_users.remove(current_player)

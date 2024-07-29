@@ -20,11 +20,11 @@ class Dealer(Base):
         await self._posting_blind(street_name)
 
         '''
-        서버 요청 사항
-        1. 모든 클라이언트에게 모든 상대방의 닉과 포지션 렌더링 요청
-        2. 모든 클라이언트에게 모든 상대방의 스택사이즈 렌더링 요청.
-        3. 모든 클라이언트에게 각자 자신의 스타팅 카드 렌더링 요청
-        4. 모든 클라이언트에게 팟 총액 렌더링 요청
+        모든 클라이언트에게 렌더링 요청
+        1. 모든 클라이언트의 닉과 포지션
+        2. 모든 클라이언트의 스택사이즈 렌더링
+        3. 각자 자신의 스타팅 카드
+        4. 팟 총액
         '''
         await self._notify_clients_nick_positions()
         await self._notify_clients_stack_sizes()
@@ -36,6 +36,8 @@ class Dealer(Base):
         # 유저 액선큐 등록
         if self.start_order:
             self.action_queue.append(self.start_order.popleft())
+        
+        return
 
     async def _prep_street(self, street_name : str ) -> None:
         
@@ -48,11 +50,11 @@ class Dealer(Base):
         await self._initialize_conditions()
 
         '''
-        서버 요청 사항
-        1. 모든 클라이언트에게 모든 상대방의 닉과 포지션 렌더링 요청
-        2. 모든 클라이언트에게 모든 상대방의 스택사이즈 렌더링 요청.
-        3. 모든 클라이언트에게 각자 자신의 스타팅 카드 렌더링 요청
-        4. 모든 클라이언트에게 팟 총액 렌더링 요청
+        모든 클라이언트에게 렌더링 요청
+        1. 모든 클라이언트의 닉과 포지션
+        2. 모든 클라이언트의 스택사이즈 렌더링
+        3. 각자 자신의 스타팅 카드
+        4. 팟 총액
         '''
         await self._notify_clients_nick_positions()
         await self._notify_clients_stack_sizes()
@@ -65,46 +67,37 @@ class Dealer(Base):
         if self.start_order:
             self.action_queue.append(self.start_order.popleft())
 
+        return
+    
     async def _play_street(self, street_name : str ) -> None:
 
         while self.action_queue:
             '''
-            서버 요청 사항 
-            시간제한은 클라이언트 쪽에서 구현
-            1. current_player에 해당하는 클라이언트에게 possible_actions 리스트 전달, 렌더링 요청
-            2. current_player에 해당하는 클라이언트가 bet, raise, all-in을 할 수 있는 경우 betting_condition 리스트 전달, 렌더링 요청
+            클라이언트에게 렌더링 및 응답 요청
+            1. current_player에 해당하는 클라이언트에게 possible_actions 리스트 전달
+            2. current_player에 해당하는 클라이언트가 bet, raise, all-in을 할 수 있는 경우 betting_condition 리스트 전달
                 self.prev_VALID 유저가 베팅 액션 선택시 베팅 해야하는 최소 금액
-                self.prev_TOTAL 유저가 레이즈 액션 선택시 가능한 레이즈 최소 금액 렌더링 요청
+                self.prev_TOTAL 유저가 레이즈 액션 선택시 가능한 레이즈 최소 금액
             '''
             current_player = self.action_queue[0]
             possible_actions : list = await self._possible_actions(street_name, current_player)
             for action in possible_actions:
                 if action in ['bet', 'raise', 'all-in']:
                     betting_condition = [self.prev_VALID, self.prev_TOTAL]
-
-            '''
-            서버 응답 대기
-            현재 액션할 차례인 클라이언트가 서버에 전달한 액션 내용을 서버로부터 받음
-            응답 형식 : 딕셔너리 = {액션종류, 베팅금액}
-            {'call' : None}, {'fold' : None}, {'check' : None},  {'all-in' : None} 
-            {'bet' : bet_amount}, {'raise' : raise_amount} 
-            서버로부터 받은 응답을 answer 변수에 할당
-            '''
-
             message = {"Possible Actions" : possible_actions, "Betting Condition" : betting_condition}
             answer : dict = await self._request_action(current_player, message)
 
-            # 클라이언트에게 전달 받은 응답이 call 이면
+            # 클라이언트에게 전달 받은 응답이 {'call' : None} 이면
             if next(iter(answer)) == "call":
-                await self._call(street_name, current_player, answer)
+                await self._call(street_name, current_player)
                 
-            # 클라이언트에게 전달 받은 응답이 fold 면 
+            # 클라이언트에게 전달 받은 응답이 {'fold' : None} 면 
             elif next(iter(answer)) == "fold":
-                await self._fold(street_name, current_player, answer)
+                await self._fold(street_name, current_player)
                 
-            # 클라이언트에게 전달 받은 응답이 check 면      
+            # 클라이언트에게 전달 받은 응답이 {'check' : None} 면      
             elif next(iter(answer)) == "check":  # BB 만 가능
-                await self._check(street_name, current_player, answer)
+                await self._check(street_name, current_player)
 
              # 클라이언트로부터 전달 받은 응답이 answer = {"bet" : bet_amount} 이면
             elif next(iter(answer)) == "bet": # 플롭부터 가능
@@ -114,9 +107,9 @@ class Dealer(Base):
             elif next(iter(answer)) == "raise":
                 await self._raise(street_name, current_player, answer)
                  
-            # 클라이언트로부터 전달 받은 응답이 answer = {"all-in" : all_in_amount} 이면
+            # 클라이언트로부터 전달 받은 응답이 answer = {"all-in" : None} 이면
             elif next(iter(answer)) == "all-in":
-                await self._all_in(street_name, current_player, answer)
+                await self._all_in(street_name, current_player)
 
             '''
             모든 클라이언트들에게 다음을 요청
@@ -130,7 +123,7 @@ class Dealer(Base):
                 await self._broadcast_message("Pot Size", self.pot_total)
 
             await self._check_connection(self.connections.keys())
-            
+
             # 다음 차례 유저 액션큐 등록
             if self.start_order:
                 self.action_queue.append(self.start_order.popleft())
@@ -143,7 +136,9 @@ class Dealer(Base):
                 answer = {'call' : self.players[current_player]['actions'][street_name]['betting_size_total']['call'][-1]}
                 self.log_hand_actions[street_name].append((current_player, answer))
             else:
-                self.log_hand_actions[street_name].append((current_player, answer)) 
+                self.log_hand_actions[street_name].append((current_player, answer))
+        
+        return
 
     async def _finishing_street(self, street_name : str ) -> None:
 
@@ -160,6 +155,8 @@ class Dealer(Base):
 
         # 다음 스트릿으로 넘어가는 유저 목록
         self.survivors.extend(list(self.actioned_queue))
+
+        return
     
     ####################################################################################################################################################
     ####################################################################################################################################################
@@ -170,15 +167,15 @@ class Dealer(Base):
     async def _end_conditions(self, street_name : str ) -> bool:
         
         if len(self.fold_users_total) == self.rings:
-            print("every user fold")
+            print("Every user fold")
             return 
 
         # 한 명 빼고 모두 폴드한 경우 = 액션을 마친 유저 숫자가 1명 뿐인 경우
         # 이 때 남은 한명은 올인유저일 수도 있고, 마지막 베팅 유저일 수도 있다.
-        if len(self.fold_users_total) == self.rings - 1 or len(self.actioned_queue) == 1 :
+        if len(self.fold_users_total) == self.rings - 1 or len(self.actioned_queue) == 1:
             if self.actioned_queue and self.check_users:
                 self.check_users[0] == self.actioned_queue[0]
-                print("all other user fold after first player check")
+                print("All other user fold after first player check")
                 return
             
             # 마지막 남은 유저 1명이 올인 유저인 경우
@@ -279,6 +276,8 @@ class Dealer(Base):
         elif version == 'side_pot_using_ranking':
             await self._side_pot_using_ranking_award(nuts, street_name)
 
+        return
+
     ####################################################################################################################################################
     ####################################################################################################################################################
     #                                                                      HAND                                                                        #
@@ -295,6 +294,7 @@ class Dealer(Base):
         if showdown:
             nuts = await self._showdown(street_name)
             await self._pot_award(nuts, street_name)
+            return
         else:
             await self._flop()
     
@@ -308,6 +308,7 @@ class Dealer(Base):
         if showdown:
             nuts = await self._showdown(street_name)
             await self._pot_award(nuts, street_name)
+            return
         else:
             await self._turn()
     
@@ -321,6 +322,7 @@ class Dealer(Base):
         if showdown:
             nuts = await self._showdown(street_name)
             await self._pot_award(nuts, street_name)
+            return
         else:
             await self._river()
     
@@ -334,6 +336,7 @@ class Dealer(Base):
         if showdown:
             nuts = await self._showdown(street_name)
             await self._pot_award(nuts, street_name)
+            return
         else:
             raise SystemExit("!!!!!!!!!!!!!!종료조건에 걸리지 않는 상황입니다. 유저들의 액션을 검토해서 종료조건을 수정하거나 추가하세요!!!!!!!!!!!!!!")
 
