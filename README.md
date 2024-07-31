@@ -125,8 +125,10 @@
 
 07.29.2024    
 - Completed implementation of "dealer algorithm" online version.
-
-
+  
+07.30.2024    
+- Concurrency test for CPU bound / disk I/O bound / CPU + diskI/O bound  
+- Planned to additional test for network I/O bound test after back-end development.  
   
 ## Directory Structure  
 
