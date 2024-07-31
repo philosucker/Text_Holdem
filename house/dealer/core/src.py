@@ -3,19 +3,26 @@ import asyncio
 from itertools import combinations
 from collections import OrderedDict, defaultdict, Counter, deque
 from fastapi import WebSocket
+import datetime 
 
 class Base:
     
     def __init__(self, table_dict : dict, connections : dict[str, WebSocket]) -> None:
         # constants from floor
         '''
-        table_dict = {
-        "table_id" : 00123,
-        "rings" = 6,
-        "stakes" = "low",
-        "new_players" = {"user_nick1" : stk_size, "user_nick2" : stk_size}
-        "continuing_players" = {"user_nick1" : stk_size, "user_nick2" : stk_size}
-        "determined_positions" = {"user_nick1" : position, "user_nick2" : position}
+        {
+        table_id: str = None
+        creation_time: str = None
+        dismissed_time : str = None
+        rings: int = 0
+        stakes: str = None
+        agent: dict[str, int] # {"hard" : 2, "easy" : 1}
+        now: int = 0
+        max: int = rings
+        status: str = None # waiting, playing, dismissed
+        new_players: dict[str, int]  # {"nick_4" : 1000, "nick_5": 800, "nick_6" : 1500}
+        continuing_players: dict[str, int]  # {"nick_1" : 100, "nick_2": 2000, "nick_3" : 500}
+        determined_positions: dict[str, str] # {"nick_1" : "BB", "nick_2": "CO", "nick_3" : D}
         }
 
         connections = {"user_nick1" : websocket, "user_nick2" : web_socket}
@@ -60,7 +67,7 @@ class Base:
         self.side_pots["river"] = {}
 
         # variables for logging
-        self.game_log = {}
+        self.game_log = {"srart_time" : datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}
         self.log_best_hands = OrderedDict()
         self.log_users_ranking = None 
         self.log_pot_change = [self.pot_total]
@@ -293,8 +300,10 @@ class Base:
     async def _making_game_log(self) -> dict:
         determined_positions : dict = await self._ask_for_next_game()
         continuing_players :dict = {user_nick : self.players[user_nick]['stk_size'] for user_nick in determined_positions}
-
         self.game_log["table_id"] = self.table_dict["table_id"]
+        self.game_log["end_time"] = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+        if not continuing_players:
+            self.game_log["dismissed_time"] = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
         self.game_log["dertermined_positions"] = determined_positions
         self.game_log["continuing_players"] = continuing_players
         self.game_log["log_players"] = self.players
