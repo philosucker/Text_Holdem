@@ -20,5 +20,3 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to verify password"
         ) from e
-    
-

@@ -34,4 +34,12 @@ class UpdatePW(BaseModel):
 class DeleteUser(BaseModel):
     email: EmailStr
 
+# 관리자 connected user 리스트 요청에 대한 스키마
+class ConnectedUser(BaseModel):
+    id: int
+    email: str
+    nick_name: str
+    stk_size: int
 
+    class Config:
+        orm_mode = True

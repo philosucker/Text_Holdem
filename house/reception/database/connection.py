@@ -9,6 +9,7 @@ load_dotenv(dotenv_path="./house/.env")
 
 '''
 DB_URL = "mysql+aiomysql://root@db:3306/demo?charset=utf8" # aiomysql 설치 후
+
 DB_URL : SQLAlchemy가 데이터베이스에 연결할 때 사용할 URL입니다.
 mysql+pymysql: SQLAlchemy와 pymysql을 사용하여 MySQL 데이터베이스에 연결한다는 의미입니다.
 root: 데이터베이스의 사용자명입니다. 여기서는 비밀번호 없이 root 사용자로 연결합니다.

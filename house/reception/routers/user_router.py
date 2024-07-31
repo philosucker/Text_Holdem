@@ -37,3 +37,7 @@ async def delete_user(user : user.DeleteUser,
                       current_user : dict = Depends(authenticate.authenticator.get_current_user), 
                       db: manipulation.Database = Depends(connection.get_db)) -> str:
     return await user_service.delete_user(user, current_user, db)
+
+@router.get("/from_user/connected_users", response_model=list[user.ConnectedUser])
+async def get_connected_users(db: manipulation.Database = Depends(connection.get_db)):
+    return await user_service.get_connected_users(db)

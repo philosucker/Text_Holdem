@@ -7,7 +7,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False) 
     password = Column(String, nullable=False)  
     nick_name = Column(String, unique=True, index=True)
-    stack_size = Column(Integer, default=100)  
-    is_active = Column(Boolean, default=True)
+    stk_size = Column(Integer, default=100)  
+    connected = Column(Boolean, default=False)
 
 
