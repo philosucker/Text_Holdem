@@ -1,0 +1,172 @@
+SQLAlchemy
+
+스키마
+    FastAPI를 개발할 때는 요청과 응답의 스키마를 정의하게 된다
+        스키마를 명시적으로 정의함으로써 타입 안전 개발이 가능하다
+
+    API의 스키마는 API의 요청과 응답의 타입을 정의하기 위한 것으로 DB의 스키마와는 다르다.
+
+    FastAPI에서는 스키마를 정의할 때 자체 클래스를 생성한다
+    
+    
+비동기 처리 
+    ASGI (Asynchronous Server Gateway Interface) 를 지원해 비동기 처리가 가능하다.
+    ASGI는 이벤트 기반 처리를 지원해, WebSocket 과 같은 기술을 사용할 수 있게 해준다.
+
+
+
+데코레이터
+    데코레이터로 지정할 함수를 정의해두면 
+    임의의 함수에 대해 어떤 전처리나 후처리를 할 수 있게 된다
+
+    def wrapper(func):
+        def _inner(*arg, **kwargs):
+            # 전처리
+            func(*arg, **kwargs)
+            # 후처리
+            return
+         return _inner
+         
+    즉 위와 같은 코드로 인해
+    @wrapper
+    def func():
+    를 쓸 수 있는 것이다. 
+
+    reception_manager 서버를 시작할 때
+    데코레이터에
+    dealer_manager 서버와 floor_manager 서버로부터 카프카 전달하는 메시지를 상시 받을 수 있게
+    백그라운드에서 돌아가는 함수를 넣자.
+
+
+경로 동작 함수 = 라우터 정의
+    모듈 분할 단위는 리소스 단위로 하는 게 좋다.
+
+    라우터는 MVC (model view controller)의 컨트롤러에 해당한다.
+    컨트롤러는 모델이나 뷰를 연결하기 때문에 비대해지기 쉽다
+    이를 피하기 위해 DB의 CRUD 처리는 별도의 디렉토리와 모듈에 구현한다
+
+응답 스키마 정의
+    파이썬의 타입힌트를 사용하면
+    FastAPI가 의존하는 Pydantic 이라는 라이브러리를 통해
+    API 입출력 유효성 검사를 수행할 수 있다.
+    Pydantic은 파이썬에서 데이터 모델을 정의하고
+    데이터 유효성을 검사하는 라이브러리이다.
+    
+            class TaskCreateResponse(TaskCreate):
+                id: int
+
+                class Config:
+                    orm_mode = True    
+요청 스키마 정의    
+    경로동작함수(라우터)에서 요청 본문 response body 를 받아 데이터를 저장해 처리해야 하는 경우
+    요청 스키마를 정의해줘야 한다.
+
+            class TaskBase(BaseModel):
+                title: str | None = Field(None, example="세탁소에 맡긴 옷을 찾으러 가기")
+             
+            class TaskCreate(TaskBase):
+                pass
+             
+            class Task(TaskBase):
+                id: int
+                done: bool = Field(False, description="완료 플래그")
+
+                class Config:
+                    orm_mode = True   
+                    
+응답스키마와 요청스키마는 같은 리소스라면 같은 모듈에 작성한다
+         
+응답 스키마를 이용해 라우터에  API의 요청과 응답을 정의
+    응답의 스키마로 경로 동작 함수의 데코레이터에 response_model을 설정
+
+예시
+    @router.post("/tasks", response_model=task_schema.TaskCreateResponse) 
+    # 라우트 데코레이터, 인자에 응답스키마, 응답이 TaskCreateResponse 모델과 일치해야 함을 지정
+    async def create_task(task_body: task_schema.TaskCreate):    
+    # 함수, 인자에 요청스키마, 요청 본문(task_body)이 TaskCreate 모델과 일치해야 함을 지정
+        return task_schema.TaskCreateResponse(id=1, **task_body.dict())
+        # task_schema.TaskCreateResponse 객체를 반환
+
+
+리턴값으로 task_schema.TaskCreateResponse 객체를 반환할 수 있는 이유는 
+Pydantic 모델이 단순한 스키마 정의 이상으로 작동하기 때문입니다. 
+Pydantic 모델은 데이터 클래스처럼 동작하여 객체를 생성하고, 유효성을 검사하며, 직렬화할 수 있게 합니다.
+즉 실제로 데이터 객체를 생성하고 반환할 수 있는 기능을 제공한다는 것입니다. 
+따라서 Pydantic 모델인 TaskCreateResponse를 리턴값으로 사용할 수 있습니다.
+
+        
+------------------------------------------------------------------
+
+FastAPI 에서는 MySQL과의 연결을 위해 sqlalchemy 라는 ORM (Object-rerational mapper) 라이브러리를 사용한다
+ORM은 객체지향 프로그래밍과 DB간의 연결을 쉽게 해주는 기술이다.
+이를 통해 DB의 데이터를 객체로 다루고, 객체를 DB에 저장하거나 조회할 수 있다.
+
+ORM은 파이썬 객체를 MySQL과 같은 관계형데이터베이스 RDBMS의 데이터 구조로 변환한다.
+MySQL의 경우 테이블 구조를 클래스로 정의하면 이를 읽거나 저장하는 SQL문을 발행해준다.
+
+DB 연결 함수를 추가한다. # db.py 참고
+    SQLAlchemy를 사용해 FastAPI 애플리케이션에서 MySQL 데이터베이스에 연결하고 세션을 관리할 수 있게 한다.
+
+FastAPI 에 DB 모델을 정의한다. # models/tasks.py 참고
+애플리케이션에서 사용할 테이블을 정의한다.
+테이블 구조를 클래스로 정의하면 SQLAlchemy는 이를 읽거나 저장하는 SQL문을 발행해준다
+
+작성한 ORM 모델을 바탕으로 DB에 테이블을 초기화하는
+DB 마이그레이션용 스크립트를 작성한다
+이 스크립트는 도커 컨테이너 내에서 실행되기 위해 작성된다.
+
+애플리케이션의 클라이언트 요청에 대한 DB CRUD 처리 구현
+이때 요청의 경우 API의 요청 스키마 또는 DB 모델 클래스를 쓸 수 있고
+응답 스키마는 DB 모델 클래스를 사용할 수 있다 
+
+----------------------------------------------------
+
+빠른 성능을 위해 DB접근 부분을 비동기화 한다
+pymysql은 파이썬의 비동기 처리 프레임워크인 ayncio를 지원하지 않는다.
+aiomysql은 pymysql기반의 MySQL용 비동기 IO처리를 제공하는 라이브러리이며 pymysql에 의존한다.
+
+    async def 는 함수가 비동기 처리를 할 수 있는 코루틴 함수 임을 나타낸다
+    await는 DB 접속(IO)처리가 발생하므로 
+    '대기 시간이 발생하는 처리를 할게요'라고 비동기 처리를 알리는 역할을 한다
+    이를 통해 파이썬은 이 코루틴의 처리에서 벗어나
+    이벤트 루프 내에서 다른 코루틴의 처리를 수행할 수 있게 된다
+    이것이 비동기/병렬 처리의 핵심이다
+
+NoSQL 에서는 데이터 저장을 위해 문서를 사용한다.
+문서는 Pydantic 모델과 동일한 방식으로 beanie가 제공하는 Document 클래스를 사용해 정의되고
+데이터베이스 컬렉션에 저장된다.
+	Beanie는 MongoDB와 함께 사용하는 비동기 ODM(Object Document Mapper)입니다. 
+	Beanie에서 문서는 Pydantic 모델과 유사하게 정의됩니다. 
+	Beanie의 Document 클래스는 
+	Pydantic의 BaseModel을 확장하여 사용자가 MongoDB 컬렉션에 저장할 수 있는 문서를 정의할 수 있게 합니다.
+
+
+reception, floor, dealer 서버 구현 모두 끝난 후
+FastAPI_SQLAlchemy 폴더의 파일 참고해 도커로 떠서 테스트 해볼 것
+
+    
+fastapi 
+uvicorn
+
+bcrypt==3.1.7 
+passlib==1.7.4
+python-jose[cryptography] 
+python-multipart
+
+sqlalchemy 
+aiomysql  
+
+
+beanie
+pydantic-settings
+
+aiosqlite
+pytest-asyncio 
+httpx
+
+
+
+
+
+
+

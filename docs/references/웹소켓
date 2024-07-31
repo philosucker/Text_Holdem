@@ -1,0 +1,246 @@
+일반적으로 클라이언트와 서버 간의 웹소켓 연결을 할 때, 연결 신청은 클라이언트가 합니다. 
+웹소켓 프로토콜은 클라이언트가 서버에 연결 요청을 보내고, 
+서버가 이를 수락하여 연결이 설정되는 방식으로 작동합니다. 이 과정을 상세히 설명하면 다음과 같습니다:
+
+웹소켓 연결 과정
+
+클라이언트가 연결 요청을 보냅니다:
+클라이언트는 서버에 HTTP 요청을 보내서 웹소켓 연결을 시도합니다. 
+이 요청은 HTTP의 GET 메서드를 사용하며, 몇 가지 추가 헤더가 포함됩니다. 
+이러한 헤더는 Upgrade: websocket과 Connection: Upgrade를 포함하여
+ 서버에게 클라이언트가 웹소켓 프로토콜로 전환하고 싶다는 것을 알립니다.
+ 
+서버가 연결 요청을 수락합니다:
+서버는 클라이언트의 요청을 받아들이고, 성공적으로 핸드셰이크가 완료되면 
+HTTP 상태 코드 101 Switching Protocols 응답을 보냅니다. 
+이 응답은 웹소켓 연결이 성공적으로 설정되었음을 알립니다.
+
+웹소켓 연결이 설정됩니다:
+핸드셰이크가 완료되면, HTTP 연결이 웹소켓 연결로 전환됩니다.
+이 시점부터 클라이언트와 서버는 웹소켓을 통해 양방향 통신을 할 수 있게 됩니다.
+
+HTTP 핸드셰이크 예시
+클라이언트가 보내는 HTTP 요청 (핸드셰이크 요청):
+
+GET /chat HTTP/1.1
+Host: server.example.com
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Version: 13
+
+서버가 응답하는 HTTP 응답 (핸드셰이크 응답):
+
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+
+
+TCP 연결 과정
+TCP 연결은 3-way handshake라고 불리는 과정으로 설정됩니다
+
+SYN (Synchronize): 클라이언트가 서버의 특정 포트 번호로 연결 요청을 보냅니다.
+SYN-ACK (Synchronize-Acknowledge): 서버가 클라이언트의 요청을 받고 응답합니다.
+ACK (Acknowledge): 클라이언트가 서버의 응답을 받고 연결을 확인합니다.
+
+리슨 소켓 (Listening Socket): 
+서버는 특정 포트에서 클라이언트의 연결 요청을 대기합니다. 이 포트를 리슨 포트라고 합니다. 
+예를 들어, 웹 서버는 일반적으로 포트 80(HTTP) 또는 443(HTTPS)에서 리슨합니다.
+
+연결 소켓 (Connected Socket): 
+클라이언트의 연결 요청이 서버에서 받아들여지면, 서버는 새로운 소켓을 생성하여 클라이언트와의 통신을 처리합니다. 
+이 소켓은 동일한 리슨 포트를 사용하지만, 소켓에 연결된 클라이언트의 IP 주소와 포트 번호로 식별되는 새로운 연결입니다.
+
+서버는 리슨 포트에서 클라이언트 연결을 대기하고, 
+연결이 설정되면 동일한 포트에서 클라이언트와 통신을 지속합니다. 
+또한 여러 클라이언트와 동시에 연결을 유지할 수 있습니다. 
+각 연결은 소켓 쌍(서버 IP:포트, 클라이언트 IP:포트)으로 고유하게 식별되기 때문입니다.
+
+리슨 소켓 설정
+서버가 포트 8080에서 클라이언트 연결을 대기하고 있다고 가정해봅시다:
+
+import asyncio
+import websockets
+
+async def handler(websocket, path):
+    name = await websocket.recv()
+    print(f"< {name}")
+    greeting = f"Hello {name}!"
+    await websocket.send(greeting)
+    print(f"> {greeting}")
+
+start_server = websockets.serve(handler, "localhost", 8080)
+
+asyncio.get_event_loop().run_until_complete(start_server)
+asyncio.get_event_loop().run_forever()
+
+
+websockets.serve(handler, "localhost", 8080)은 WebSocket 서버를 생성하는 함수입니다. 
+이 함수는 handler라는 코루틴 함수를 사용하여 새로운 WebSocket 연결을 처리합니다.
+
+websockets.serve()는 WebSocket 서버를 생성하고 지정된 주소와 포트("localhost", 8080)에서 연결을 수신 대기합니다.
+클라이언트가 서버에 연결을 시도하면 handler 함수가 호출됩니다. 
+이때 handler 함수는 두 개의 인자를 받습니다:
+    websocket: 
+    클라이언트와 서버 간의 WebSocket 연결을 나타내는 객체입니다. 이 객체를 통해 데이터를 주고받을 수 있습니다.
+    path: 
+    연결된 클라이언트의 요청 URL 경로를 나타냅니다. 이 값은 기본적으로 빈 문자열("")로 설정되며, 
+    특정한 경로가 필요하지 않을 경우 무시될 수 있습니다.
+이 두 인자는 websockets.serve() 함수가 클라이언트와의 연결을 처리할 때 자동으로 handler 함수에 전달됩니다. 
+따라서 handler 함수는 새로운 클라이언트가 연결될 때마다 해당 클라이언트와 통신할 수 있는 WebSocket 객체와 경로 정보를 받게 됩니다.
+다시 말해서 각 클라이언트가 서버에 연결될 때마다 handler 함수가 호출되며, 
+해당 클라이언트와의 WebSocket 연결을 나타내는 websocket 객체가 생성됩니다. 
+이 객체는 서버와 클라이언트 간의 통신을 담당하며, 각각의 클라이언트마다 별도로 유지됩니다.
+
+각 클라이언트의 엔드포인트에 대한 정보는 websocket 객체에 포함되어 있습니다. 
+이 객체는 클라이언트의 주소, 포트 번호 등의 정보를 포함하고 있으며, 서버와 클라이언트 간의 메시지 송수신을 관리합니다.
+
+
+
+클라이언트 연결
+import asyncio
+import websockets
+
+async def hello():
+    uri = "ws://localhost:8080"
+    async with websockets.connect(uri) as websocket:
+        await websocket.send("world")
+        greeting = await websocket.recv()
+        print(f"< {greeting}")
+
+asyncio.get_event_loop().run_until_complete(hello())
+
+서버 리슨 포트: 
+서버는 포트 8080에서 리슨 소켓을 열어 클라이언트의 연결을 대기합니다.
+
+클라이언트 연결 요청: 
+클라이언트는 포트 8080으로 서버에 연결을 요청합니다.
+
+연결 소켓 생성: 
+서버는 클라이언트의 요청을 받아들여 새로운 연결 소켓을 생성합니다. 
+이 소켓은 여전히 포트 8080을 사용하지만, 클라이언트의 IP 주소와 포트 번호로 식별됩니다.
+
+통신 지속: 
+클라이언트와 서버는 이 연결 소켓을 통해 데이터를 주고받습니다.
+
+
+클라이언트의 엔드포인트 정보는 직접적으로 저장되지는 않지만, 
+필요하다면 서버에서 이러한 정보를 관리하기 위해 websocket 객체를 키로 하는 딕셔너리 등을 사용할 수 있습니다. 
+예를 들어, 서버에서 접속한 모든 클라이언트를 관리하고 메시지를 브로드캐스트하기 위해 다음과 같이 클라이언트 목록을 유지할 수 있습니다:
+
+import asyncio
+import websockets
+
+connected_clients = set()
+
+async def handler(websocket, path):
+    # 클라이언트 연결 시 리스트에 추가
+    connected_clients.add(websocket)
+    try:
+        # 클라이언트로부터 메시지를 수신하고 응답
+        async for message in websocket:
+            print(f"< {message}")
+            greeting = f"Hello {message}!"
+            await websocket.send(greeting)
+            print(f"> {greeting}")
+    finally:
+        # 클라이언트 연결 종료 시 리스트에서 제거
+        connected_clients.remove(websocket)
+
+start_server = websockets.serve(handler, "localhost", 8080)
+
+asyncio.get_event_loop().run_until_complete(start_server)
+asyncio.get_event_loop().run_forever()
+
+위 예제에서 connected_clients는 현재 연결된 클라이언트의 websocket 객체를 저장하는 집합입니다. 
+새로운 클라이언트가 연결되면 connected_clients.add(websocket)으로 추가하고, 
+연결이 종료되면 connected_clients.remove(websocket)으로 제거합니다. 
+이를 통해 서버는 현재 연결된 클라이언트를 관리할 수 있습니다.
+
+
+위 방식은 websockets 라이브러리를 사용하는 방식입니다.
+웹소켓 서버 생성: websockets.serve() 함수는 간단한 웹소켓 서버를 빠르게 만들 수 있도록 해줍니다.
+클라이언트 연결: 클라이언트는 직접 서버 주소 (ws://localhost:8080)로 연결합니다.
+경로 처리: 기본적으로 경로를 따로 지정하지 않고, 모든 연결 요청을 handler 함수에서 처리합니다.
+
+아래는
+FastAPI 서버에서 WebSocket을 사용하여 클라이언트와 통신하는 예시입니다.
+엔드포인트 설정: FastAPI의 @app.websocket("/ws") 데코레이터를 사용하여 특정 경로 (/ws)에서 웹소켓 연결을 처리할 수 있습니다.
+라우팅: FastAPI의 라우팅 기능을 통해 다양한 경로를 지정하고, 각 경로마다 다른 웹소켓 처리를 할 수 있습니다.
+프레임워크 통합: FastAPI는 웹소켓뿐만 아니라 REST API, 데이터베이스 연동 등 다양한 기능을 제공하므로, 웹소켓 기능을 다른 웹 애플리케이션 기능과 쉽게 통합할 수 있습니다.
+
+선택은 주로 프로젝트의 요구 사항에 따라 달라집니다. 
+FastAPI와 같은 프레임워크를 사용하면 웹소켓 외에도 다양한 기능을 통합하여 제공할 수 있으며, 
+websockets 라이브러리는 가볍고 웹소켓만을 위한 간단한 서버를 만들 때 적합합니다.
+
+ 
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from typing import List
+
+app = FastAPI()
+
+# 연결된 클라이언트를 관리하기 위한 리스트
+connected_clients: List[WebSocket] = []
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    connected_clients.append(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # 클라이언트로부터 메시지를 수신하고 처리할 수 있습니다.
+            print(f"Received message from client: {data}")
+    except WebSocketDisconnect:
+        connected_clients.remove(websocket)
+        print("Client disconnected")
+
+@app.get("/broadcast")
+async def broadcast_message(message: str):
+    for client in connected_clients:
+        await client.send_text(message)
+    return {"message": "Message sent to all clients"}
+    
+클라이언트는 WebSocket을 사용하여 서버에 연결하고, 서버로부터 메시지를 수신합니다.
+
+import asyncio
+import websockets
+
+async def connect_to_server():
+    uri = "ws://localhost:8000/ws"
+    async with websockets.connect(uri) as websocket:
+        await websocket.send("Hello, server!")
+        while True:
+            message = await websocket.recv()
+            print(f"Received message from server: {message}")
+
+# 클라이언트가 서버에 연결하는 함수 호출
+asyncio.get_event_loop().run_until_complete(connect_to_server())
+
+
+서버 설정:
+
+/ws 엔드포인트를 통해 WebSocket 연결을 수락합니다.
+클라이언트가 연결되면 connected_clients 리스트에 WebSocket 객체를 추가합니다.
+클라이언트로부터 메시지를 수신하고, 연결이 끊어지면 리스트에서 제거합니다.
+/broadcast 엔드포인트를 통해 모든 연결된 클라이언트에게 메시지를 보낼 수 있습니다.
+클라이언트 설정:
+
+WebSocket을 통해 서버의 /ws 엔드포인트에 연결합니다.
+서버로 메시지를 보내고, 서버로부터 메시지를 수신하여 출력합니다.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

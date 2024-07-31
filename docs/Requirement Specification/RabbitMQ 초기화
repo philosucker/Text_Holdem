@@ -1,0 +1,31 @@
+sudo apt-get update
+sudo apt-get install -y erlang
+sudo apt-get install -y rabbitmq-server
+
+# Start RabbitMQ service
+sudo systemctl start rabbitmq-server
+sudo systemctl enable rabbitmq-server
+
+# Enable RabbitMQ management plugin
+sudo rabbitmq-plugins enable rabbitmq_management
+
+pip install fastapi aio_pika
+
+
+질문1)reception은 
+request_stack_size_queue와  update_stack_size_queue 를 만들어 놓고
+floor 서버가 저 두 메시지 큐로 메시지를 보내면  request_stack_size_queue 에 있는 메시지를 먼저 소비해서 process_request_stack_size 함수로 처리한 내용을
+다시 floor 서버로 보내는 거 맞아? 지금 구현이 그렇게 구현되어 있지 않으면 그렇게 구현되도록 수정해.
+
+질문2) floor 서버는 
+update_stack_size_queue 메시지 큐와 stack_size_queue 메시지큐 두 개를 만들어 놓고
+dealer 서버로부터 rabbitmq로 전달받는 유저 스택사이즈 딕셔너리를 update_stack_size_queue  메시지 큐로 받아서 곧바로 reception 서버의 update_stack_size_queue 메시지 큐로 보내야 해.
+
+그리고 내부에서 유저 아이디 리스트를 받아서 이걸 reception 서버의 request_stack_size_queue 메시지 큐로 보내는 함수A가 있어야 해.
+이 함수는 필요할 때마다 호출되는 함수고 비동기 함수야. 즉 reception으로부터 자신이 보낸 유저리스트에 해당하는 유저 스택사이즈 딕셔너리가 오기 전까지 기다리는 함수여야해.
+
+그리고 reception 서버의 send_stack_size_to_floor 함수가 stack_size_queue 라는 이름의 큐로 floor 서버에 스택사이즈 리스트를 보내면
+floor는 컨슈머를 통해  전달받은 유저 스택사이즈 리스트를 stack_size_queue 메시지 큐로 받고 이 데이터를 받아서 처리하는함수 A에 보내줘야해. 
+이  과정은 자동으로 이뤄져야 해.
+
+지금 내가 원하는대로 구현된 스크립트를 다시 짜서 줘봐

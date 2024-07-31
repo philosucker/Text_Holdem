@@ -1,0 +1,254 @@
+CH13 비동기 처리
+
+방법  : 빠른 성능을 위해 DB접근 부분을 비동기화 한다
+
+    FastAPI 에 연동할 DB로서
+    SQLAlchemy의 백엔드인 MySQL을 이용하는 클라이언트로
+    pymysql을 사용했다.
+
+    pymysql은 파이썬의 비동기 처리 프레임워크인 ayncio를 지원하지 않는다.
+
+    IO바운드가 발생하는 무거운 DB처리가 늘어나는 경우
+    병렬처리가 효과적이다
+
+        IO바운드는 
+        작업중 I/O 대기 시간이 많은 프로세스를 의미하며
+        파일 쓰기, 디스크 작업, 네트워크 통신과 같은 작업에서 발생한다.
+
+1. 이제 비동기 처리를 지원하기 위해
+aiomysql을 설치하여 사용한다
+
+    aiomysql은 pymysql기반의 MySQL용 비동기 IO처리를 제공하는 라이브러리이며
+    pymysql에 의존한다.
+
+    demo-app이 실행된 상태에서 (sudo docker compose up)poetry를 실행하여 aiomysql을 설치한다.
+
+    sudo docker compose exec demo-app poetry add aiomysql
+    
+2. 이제 #api/db.py의 DB 접속함수 get_db()를 비동기 대응함수로 수정한다
+    
+    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+    from sqlalchemy.orm import sessionmaker, declarative_base
+
+    ASYNC_DB_URL = "mysql+aiomysql://root@db:3306/demo?charset=utf8"
+
+    async_engine = create_async_engine(ASYNC_DB_URL, echo=True)
+    async_session = sessionmaker(
+        autocommit=False, autoflush=False, bind=async_engine, class_=AsyncSession
+    )
+
+    Base = declarative_base()
+
+    async def get_db():
+        async with async_session() as session:
+             yield session
+             
+    참고로 migrate_db.py 에서도 동일하게 creat_engine을 호출하고 있는데
+    마이그레이션 작업은 자주 수행하거나 빠른 속도를 요구하는 작업이 아니기 때문에
+    비동기화할 필요는 없다.
+
+
+3. 이제 
+# api/cruds/task.py, # api/routers/task.py 
+# api/cruds/done.py, #api/routers/done.py 모두 수정한다.
+
+3-1 Create 수정
+    CRUD Create 수정
+    
+        # api/cruds/task.py
+        from sqlalchemy.ext.asyncio import AsyncSession
+         
+        '''
+       db.add(task): 
+        이 메서드는 비동기 메서드가 아니므로 await를 사용하지 않습니다. 
+        이는 단순히 SQLAlchemy 세션에 task 객체를 추가하는 작업을 수행합니다. 
+        이 작업은 메모리 내에서 이루어지며, 데이터베이스와의 네트워크 통신을 포함하지 않으므로 비동기 처리가 필요하지 않습니다.
+
+       await db.commit(): 
+        이 메서드는 데이터베이스에 변경 사항을 커밋하는 비동기 작업입니다. 
+        이는 실제로 데이터베이스에 변경 사항을 반영하기 위해 네트워크 통신을 필요로 하므로 await 키워드를 사용합니다.
+
+       await db.refresh(task): 
+        이 메서드는 데이터베이스에서 해당 객체의 최신 상태를 가져오는 비동기 작업입니다. 
+        이 작업 역시 데이터베이스와의 상호작용을 포함하므로 await 키워드를 사용합니다.
+        '''
+        async def create_task(db: AsyncSession, task_create: task_schema.TaskCreate) -> task_model.Task: # aiomysql 설치후
+             task = task_model.Task(**task_create.dict())
+             db.add(task)
+             await db.commit()
+             await db.refresh(task)
+             return task
+       
+            
+        async def 는 함수가 비동기 처리를 할 수 있는 코루틴 함수 임을 나타낸다
+        await는 DB 접속(IO)처리가 발생하므로 
+        '대기 시간이 발생하는 처리를 할게요'라고 비동기 처리를 알리는 역할을 한다
+        이를 통해 파이써은 이 코루틴의 처리에서 벗어나
+        이벤트 루프 내에서 다른 코루틴의 처리를 수행할 수 있게 된다
+        이것이 비동기/병렬 처리의 핵심이다
+
+            코루틴은 서브루틴(코루틴이 아닌 일반함수)의 일반형이다
+            일반 함수는 동기처리만 가능하지만, 
+            코루틴은 동기처리와 비동기 처리를 모두 할 수 있으므로 일반형이다
+     
+    CRUD Create에 대한 API 라우터 수정
+    
+        # api/routers/task.py     
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        @router.post("/tasks", response_model=task_schema.TaskCreateResponse)
+        async def create_task(
+            task_body: task_schema.TaskCreate, db: AsyncSession = Depends(get_db) # aiomysql 설치후
+        ):
+            return await task_crud.create_task(db, task_body)
+
+3-2 Read 수정    
+    CRUD Read 수정    
+    
+         # api/cruds/task.py
+        async def get_tasks_with_done(db: AsyncSession) -> list[tuple[int, str, bool]]: # aiomysql 설치후
+            result: Result = await db.execute(
+                select(
+                    task_model.Task.id,
+                    task_model.Task.title,
+                    task_model.Done.id.isnot(None).label("done"),
+                ).outerjoin(task_model.Done)
+
+            )
+
+            return result.all()  
+        
+    DB CRUD Read 에 대한 API 라우터 수정 
+        # api/routers/task.py
+           
+        @router.get("/tasks", response_model=list[task_schema.Task]) # aiomysql 설치후
+        async def list_tasks(db: AsyncSession = Depends(get_db)):
+            return await task_crud.get_tasks_with_done(db)    
+    
+3-3 Update 수정    
+    CRUD Update 수정
+    
+        #api/cruds/task.py      
+        async def get_task(db: AsyncSession, task_id: int) -> task_model.Task | None:
+            result: Result = await db.execute(
+                select(task_model.Task).filter(task_model.Task.id == task_id)
+            )
+            return result.scalars().first()    
+            
+        async def update_task(
+            db: AsyncSession, task_create: task_schema.TaskCreate, original: task_model.Task
+         ) -> task_model.Task:
+            original.title = task_create.title
+            db.add(original)
+            await db.commit()
+            await db.refresh(original)
+            return original
+        
+    CRUD Update에 대한 API router 수정
+    
+        #api/routers/task.py
+        @router.put("/tasks/{task_id}", response_model=task_schema.TaskCreateResponse)
+    async def update_task(
+        task_id: int, task_body: task_schema.TaskCreate, db: AsyncSession = Depends(get_db)
+        ):
+
+        task = await task_crud.get_task(db, task_id=task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        return await task_crud.update_task(db, task_body, original=task)
+    
+3-4 Delete 수정
+
+    DB CRUD Delete 수정
+
+        # api/cruds/task.py
+        async def delete_task(db: AsyncSession, original: task_model.Task) -> None: # aiomysql 설치후
+            await db.delete(original)
+            await db.commit()    
+            
+    CRUD Delete에 대한 API router 수정
+    
+        # api/routers/task.py
+        @router.delete("/tasks/{task_id}", response_model=None)
+    async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)): # aiomysql 설치후
+        task = await task_crud.get_task(db, task_id=task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+    return await task_crud.delete_task(db, original=task)
+    
+3-5 Done 리소스 수정
+
+    # api/cruds/done.py
+    from sqlalchemy.ext.asyncio import AsyncSession # aiomysql 설치 후
+
+    import api.models.task as task_model
+
+
+    # def get_done(db: Session, task_id: int) -> task_model.Done | None:
+    #     result: Result = db.execute(
+    #         select(task_model.Done).filter(task_model.Done.id == task_id)
+    #     )
+    #     return result.scalars().first()
+
+    async def get_done(db: AsyncSession, task_id: int) -> task_model.Done | None:
+        result: Result = await db.execute(
+            select(task_model.Done).filter(task_model.Done.id == task_id)
+        )
+        return result.scalars().first()
+
+    # def create_done(db: Session, task_id: int) -> task_model.Done:
+    #     done = task_model.Done(id=task_id)
+    #     db.add(done)
+    #     db.commit()
+    #     db.refresh(done)
+    #     return done
+
+    async def create_done(db: AsyncSession, task_id: int) -> task_model.Done:
+        done = task_model.Done(id=task_id)
+        db.add(done)
+        await db.commit()
+        await db.refresh(done)
+        return done
+
+    # def delete_done(db: Session, original: task_model.Done) -> None:
+    #     db.delete(original)
+    #     db.commit()
+
+    async def delete_done(db: AsyncSession, original: task_model.Done) -> None:
+        await db.delete(original)
+        await db.commit()    
+    
+ 3-5 Done API 라우터 수정
+    
+     # api/routers/done.py
+     
+    from sqlalchemy.ext.asyncio import AsyncSession 
+     
+    @router.put("/tasks/{task_id}/done", response_model=
+    done_schema.DoneResponse)
+    # async def mark_task_as_done(task_id: int, db: Session = Depends(get_db)):
+    async def mark_task_as_done(task_id: int, db: AsyncSession = Depends(get_db)):
+        # done = done_crud.get_done(db, task_id=task_id)
+        done = await done_crud.get_done(db, task_id=task_id)
+        if done is not None:
+            raise HTTPException(status_code=400, detail="Done already exists")
+
+        # return done_crud.create_done(db, task_id)
+        return await done_crud.create_done(db, task_id)
+
+
+    @router.delete("/tasks/{task_id}/done", response_model=None)
+    # async def unmark_task_as_done(task_id: int, db: Session = Depends(get_db)):
+    async def unmark_task_as_done(task_id: int, db: AsyncSession = Depends(get_db)):
+        # done = done_crud.get_done(db, task_id=task_id)
+        done = await done_crud.get_done(db, task_id=task_id)
+        if done is None:
+            raise HTTPException(status_code=404, detail="Done not found")
+
+        # return done_crud.delete_done(db, original=done)
+        return await done_crud.delete_done(db, original=done)  
+    
+    
+  

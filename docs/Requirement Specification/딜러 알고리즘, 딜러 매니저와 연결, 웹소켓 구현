@@ -1,0 +1,243 @@
+async def _connect_websocket_clients(self):
+    async def connect(user_id):
+        uri = f"{self.ws_url}/{user_id}"
+        self.websocket_clients[user_id] = await websockets.connect(uri)
+    await asyncio.gather(*[connect(user_id) for user_id in self.user_id_list])            
+
+async def _connect_websocket_clients 함수는 각 유저의 WebSocket에 연결을 시도하고, 
+유저 아이디를 키로 하고 WebSocket 연결 객체를 값으로 하는 딕셔너리를 생성할 것입니다. 
+이 함수는 여러 클라이언트와 비동기적으로 연결을 설정하는 역할을 합니다.
+
+위 함수를
+src.py의 Base 클래스 안에 정의해놓고
+ 
+go_street 메서드의 바디에서 호출하게 만들어 놓았다.
+    await self._connect_websocket_clients()
+    await self._preFlop(stk_size)
+    await self._close_websocket_clients()
+    
+이 구조는 dealer인스턴스가 클라이언트에게 연결을 시도하는 방식이다.
+---------------------------------------------------
+
+Dealer 인스턴스 내부에서 웹소켓 연결 처리
+이 접근 방식에서는 dealer.py의 Dealer 클래스 내부에서 클라이언트들과의 웹소켓 연결을 처리합니다.
+ 이를 위해 Dealer 클래스가 직접 웹소켓 서버를 실행하고, 클라이언트 연결을 처리하며, 게임 로직을 실행합니다.
+
+장점
+모든 로직이 한 클래스 내부에 있기 때문에 코드가 한 곳에 집중되어 관리하기 쉬움.
+Dealer 클래스가 웹소켓 연결을 직접 관리하므로 외부 종속성이 줄어듬.
+단점
+Dealer 클래스의 책임이 많아지며, 단일 책임 원칙(SRP)에 위배될 수 있음.
+웹소켓 연결과 게임 로직이 복잡하게 얽혀 코드 유지보수가 어려울 수 있음.
+
+2. Dealer 인스턴스 외부에서 웹소켓 연결 처리 (추천 방법)
+이 접근 방식에서는 Dealer 인스턴스 외부에서 웹소켓 연결을 처리하는 DealerManager라는 FastAPI 서버를 사용합니다.
+클라이언트와의 웹소켓 연결은 DealerManager가 처리하고, 연결 후 Dealer 인스턴스를 실행합니다.
+
+장점
+역할 분리가 명확해지며, 단일 책임 원칙(SRP)을 준수할 수 있음.
+웹소켓 연결과 게임 로직이 분리되어 코드 유지보수가 용이함.
+FastAPI를 사용하여 확장성과 테스트 용이성 향상.
+단점
+초기 설정이 더 복잡할 수 있음.
+두 컴포넌트 간의 통신을 명확히 해야 함.
+
+
+하나의 웹소켓 엔드포인트 함수를 사용하여 여러 클라이언트와 연결을 관리할 수 있습니다. 
+각 클라이언트는 고유의 client_id로 서버에 연결을 요청하고, 서버는 이 client_id를 사용하여 각 클라이언트를 구분합니다.
+
+dealer_manager.py에 구현한 코드
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    await manager.connect(websocket, client_id)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # 클라이언트 메시지 처리 로직 (필요에 따라 구현)
+    except WebSocketDisconnect:
+        await manager.disconnect(websocket)
+        
+dealer_manager에서 connections 딕셔너리에 접속한 유저들을 모은후 이 딕셔너리를 dealer인스턴스에 넘겨주고 호출하면
+dealer.py 내부에 구현된 아래 함수를 호출함으로써 원하는 유저와 인스턴스가 통신 가능      
+
+
+   async def request_action(self, player: str, data: Any = None):
+        websocket = self.connections[player]
+        if data:
+            await websocket.send_json(data)
+        else:
+            await websocket.send_text(f"{player}, it's your turn!")
+        action = await websocket.receive_text()
+        return action
+                
+필요한 종류의 request_action 함수를 Dealer 클래스 내부에서 메서드로 구현하는 것이 최선입니다. 
+이는 속도와 안정성, 유지 보수 용이성 측면에서 효율적입니다. 
+각 메서드는 클라이언트로부터 다양한 형태의 데이터를 요청하고 받을 수 있습니다.
+
+
+websocket_endpoint 메서드 안의 await websocket.receive_text()와 
+Dealer 클래스의 request_action 메서드 안의 await websocket.receive_text()는 각각 다른 목적을 가지고 있습니다.
+
+websocket_endpoint 메서드: 이 메서드 안의 while True 루프는 웹소켓 연결을 통해 
+클라이언트가 서버로 보내는 메시지를 지속적으로 수신합니다. 
+클라이언트가 서버로 보내는 모든 메시지를 처리하기 위한 일반적인 수신 루프입니다.
+이러한 메시지는 일반적인 상태 업데이트, 채팅 메시지, 기타 명령 등을 포함할 수 있습니다.
+
+request_action 메서드: 이 메서드는 특정 액션을 요청하기 위해 클라이언트에게 메시지를 보내고, 그에 대한 응답을 수신합니다. 
+이는 게임 로직 내에서 특정 시점에 클라이언트의 액션을 요청하고, 응답을 받아 처리하기 위한 목적입니다.
+
+request_action 함수로 클라이언트에게 액션 요청을 보내고 그 요청에 대한 클라이언트의 응답을 받으면, 
+해당 응답은 request_action 함수 내부의 receive_text()로 전달됩니다. 
+
+websocket_endpoint 메서드의 while True 루프에서 data에는 클라이언트가 웹소켓을 통해 서버로 보내는 메시지가 담깁니다. 
+이는 클라이언트가 서버로 보낸 모든 텍스트 메시지를 수신합니다.
+
+
+dealer 인스턴스가 웹소켓으로 연결된 유저들에게 게임진행에 필요한 액션 요청을 
+request_action함수 호출을 통해 게임루프 내부에서 짜여진 알고리즘대로 보낼 떄
+
+이와 별개로 동시에 유저들은 websocket_endpoint 함수의 @app.websocket("/ws/{client_id}") 라우트로
+HTTP 요청을 보내면 연결된 웹소켓을 통해 
+서버에 유저가 보내고 싶은 메시지를 동시에 보낼 수 있고
+서버는 이를 게임 루프내에서 dealer 인스턴스가 보내는 액션요청과 독립적으로 처리할 수 있다
+
+
+
+클라이언트가 dealer_manager로 웹소켓 연결 신청시
+클라이언트가 ws://<서버 주소>:8001/ws/{client_id} 형식의 URL을 알고 있다면, 
+Unity 클라이언트 앱에서 dealer_manager 서버로 웹소켓 연결을 시도할 수 있습니다. 
+클라이언트는 해당 URL로 웹소켓 연결을 시도하면 dealer_manager 서버의 websocket_endpoint 함수가 호출되어 연결이 처리됩니다.
+
+질문1) ws://<서버 주소>:8001/ws/{client_id} 이 URL이 아니라 이 URL로 라우팅될 수 있게 Nginx가 처리할 수 있게 하려면
+클라이언트는 Nginx 에게 어떤 주소로 보내면 좋을까? 클라이언트는 Nginx의 엔드포인트와 자신의 client_id를 알고 있어.
+
+클라이언트가 ws://<서버 주소>:8001/ws/{client_id}로 라우팅되도록 Nginx를 설정하려면, 
+클라이언트는 다음과 같은 형식의 URL로 연결 요청을 보내야 합니다:
+ws://<Nginx 서버 주소>:<포트>/ws/{client_id}
+
+이를 위해 Nginx 설정 파일에 적절한 프록시 설정을 추가해야 합니다.
+
+Nginx 설정 예시
+아래는 Nginx가 /ws/{client_id}로 들어오는 요청을 백엔드 웹소켓 서버로 프록시하는 설정 예시입니다:
+
+http {
+    upstream websocket_backend {
+        # 웹소켓 서버의 실제 주소와 포트
+        server <웹소켓 서버 주소>:8001;
+    }
+
+    server {
+        listen 80;
+        server_name example.com;
+
+        location /ws/ {
+            proxy_pass http://websocket_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+        }
+    }
+}
+
+이 설정에서 location /ws/ 블록은 Nginx가 /ws/{client_id}로 들어오는 모든 요청을 
+websocket_backend로 지정된 실제 웹소켓 서버로 프록시합니다.
+proxy_pass 지시문을 통해 웹소켓 서버의 주소로 요청을 전달하고, 
+proxy_set_header 지시문을 통해 업그레이드 헤더를 설정하여 웹소켓 프로토콜로의 업그레이드를 지원합니다.
+
+이렇게 설정하면, 클라이언트는 Nginx 서버를 통해 안전하게 웹소켓 서버에 연결할 수 있습니다. 
+Nginx는 클라이언트의 요청을 적절히 처리하여 백엔드의 웹소켓 서버로 라우팅합니다.
+
+
+Unity 클라이언트에서 웹소켓 연결 시도 예제
+Unity에서 웹소켓을 사용하려면 WebSocket-Sharp 라이브러리를 사용할 수 있습니다. 
+다음은 Unity 클라이언트에서 웹소켓을 통해 dealer_manager 서버로 연결하는 예제입니다.
+
+WebSocket-Sharp 라이브러리 설치: 
+Unity 프로젝트에 WebSocket-Sharp 라이브러리를 추가합니다. 패키지를 다운로드하여 Unity 프로젝트의 Assets 폴더에 넣습니다.
+
+Unity 스크립트 작성: Unity에서 웹소켓을 통해 서버와 연결하는 스크립트를 작성합니다.
+
+using UnityEngine;
+using WebSocketSharp;
+
+public class WebSocketClient : MonoBehaviour
+{
+    private WebSocket ws;
+    public string serverAddress = "ws://Nginx엔드포인트/ws/";
+    public string clientId = "client1";
+
+    void Start()
+    {
+        ws = new WebSocket(serverAddress + clientId);
+
+        ws.OnMessage += (sender, e) =>
+        {
+            Debug.Log("Message from server: " + e.Data);
+        };
+
+        ws.OnOpen += (sender, e) =>
+        {
+            Debug.Log("WebSocket connection opened.");
+        };
+
+        ws.OnClose += (sender, e) =>
+        {
+            Debug.Log("WebSocket connection closed.");
+        };
+
+        ws.OnError += (sender, e) =>
+        {
+            Debug.Log("WebSocket error: " + e.Message);
+        };
+
+        ws.Connect();
+    }
+
+    void OnDestroy()
+    {
+        if (ws != null)
+        {
+            ws.Close();
+            ws = null;
+        }
+    }
+
+    void Update()
+    {
+        // 예시로 유저가 특정 키를 누를 때 서버에 메시지 전송
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            if (ws != null && ws.IsAlive)
+            {
+                ws.Send("Hello from Unity!");
+            }
+        }
+    }
+}
+
+
+테이블 ID는 "table456"이 됩니다. 
+start_game 이 connect 한군데서만 호출되는 마지막 코드
+이후 코드에선 handle_massage에서도 호출된다. 왜 이렇게 바뀐거지?
+
+Dealer 인스턴스에 의해 동시 접근 가능성이 있는 함수는 다음과 같습니다:
+
+메시지 브로커 라우팅 기능
+라우팅: 메시지를 특정 기준에 따라 라우팅합니다. 예를 들어, 특정 조건을 만족하는 메시지만 특정 큐나 소비자에게 전달합니다.
+
+테이블 딕셔너리와 table ready 라는 문자열이 포함된 메시지를 floor가 dealer_manager에게 전달하면 
+메시지 브로커는 table ready 를 보고서 우선순위를 가장 높게 처리해서 dealer_manager에게 전달한다.
+
+dealer_manager 는 해당 메시지를 받으면 
+A : dealer_manager가 해당 클라이언트들에게 자신에게 웹소켓 연결을 하라고 할 수도 있고
+
+B : 그전에 floor가 메시지를 보내면서 해당 클라이언트들에게 dealer_manager에게 웹소켓 연결을 하라고 할 수도 있다
+
+A 방법을 쓰면 순차적으로 처리가 가능할것 같다
+B 방법을 쓰면 dealer_manager 서버는 이미 돌아가는 중이고 리슨 소켓으로 클라이언트들의 연결을 받고있는 중이므로
+
+핸들 메시지 함수보다 웹소켓 연결이 더빨리 끝나게 되면 connect 함수 쪽에 있는 start_game이 먼저 호출될  거고
+이 경우 핸들 메시지 함수에서는 모든 웹소켓 연결 조건이 이미 만족됐으므로 start_game이 중복되어 호출될 수 있다.
