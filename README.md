@@ -121,7 +121,7 @@
 
 07.24.2024
 - Completed MicroService Architecture design.  
-  <img src="https://github.com/user-attachments/assets/704826fb-b608-4ad1-9ee6-0b994681e69c width="1000" />  
+  <img src="https://github.com/user-attachments/assets/704826fb-b608-4ad1-9ee6-0b994681e69c" width="1000" />  
 
 07.29.2024    
 - Completed implementation of "dealer algorithm" online version.
