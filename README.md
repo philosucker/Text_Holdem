@@ -77,8 +77,7 @@
 - Completed MicroService Architecture design.   
   <img src="https://github.com/user-attachments/assets/0a69cabd-80b6-4262-92fe-d7f274054019" width="1000" />   
 
-07.22.2024  
-#### Started development of the backend  
+### 07.22.2024 Started development of the backend  
     - Implementing reception, floor, and dealer servers  
     - Implementing server-client connections  
     - Implementing communication between servers  
@@ -92,8 +91,7 @@
 07.16.2024   
 - Started learning socket programming. (WebSocket)
 
-07.12.2024  
-#### Completed implementation of "dealer algorithm"
+### 07.12.2024 Completed implementation of "dealer algorithm"
   
 07.10.2024    
 - Completed implementation of "side pot" creation and management algorithm.    
@@ -121,8 +119,7 @@
 06.25.2024  
 - Completed implementation of “bet”, “raise”, “all-in”, “call”, “check”, and “fold action” algorithms.  
   
-06.24.2024  
-#### Started development of texas holdem dealer algorithm.  
+### 06.24.2024 Started development of texas holdem dealer algorithm.  
 
 06.19.2024  
 - Completed Monolithic Architecture design.  
