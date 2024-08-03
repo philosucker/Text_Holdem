@@ -128,67 +128,10 @@
   
 07.30.2024    
 - Concurrency test for CPU bound / disk I/O bound / CPU + diskI/O bound  
-- Planned to additional test for network I/O bound test after back-end development.  
+- Planned to additional test for network I/O bound test after back-end development.
+
+08/03.2024  
+- completed implementaion of reception - floor connection
   
-## Directory Structure  
 
-    app
-     │ 
-     ├── house  
-     │     │   
-     │     ├── reception(Implementing)  
-     │     │      │
-     │     │      ├── authentication
-     │     │      │
-     │     │      ├── database
-     │     │      │     
-     │     │      ├── routers     
-     │     │      │
-     │     │      ├── schemas
-     │     │      │
-     │     │      ├── services
-     │     │      │        
-     │     │      └── main.py
-     │     │
-     │     │
-     │     ├── floor(Implementing)
-     │     │      │
-     │     │      ├──
-     │     │      │
-     │     │      ├──
-     │     │      │
-     │     │      ├──
-     │     │      │
-     │     │      └── main.py             
-     │     │      
-     │     │
-     │     ├── dealer(Implementing)
-     │     │      │
-     │     │      ├── core
-     │     │      │    ├── src.py
-     │     │      │    └── dealer.py
-     │     │      │    
-     │     │      │    
-     │     │      │
-     │     │      └── main.py     
-     │     │     
-     │     │ 
-     │     └── agency
-     │            │
-     │            ├── database
-     │            │     
-     │            ├── routers     
-     │            │
-     │            ├── schemas
-     │            │
-     │            ├── services
-     │            │        
-     │            └── main.py 
-     ├──client
-     │     └──Unity (Implementing)
-     │          
-     │      
-     └── docs      
-
-    
 
