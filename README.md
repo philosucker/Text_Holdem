@@ -91,6 +91,7 @@
 07.16.2024   
 - Started learning socket programming. (WebSocket)
 
+
 ### 07.12.2024 Completed implementation of "dealer algorithm"
   
 07.10.2024    
