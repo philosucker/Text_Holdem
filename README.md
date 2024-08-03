@@ -59,79 +59,76 @@
 #### I made reference for you:) Please refer to the documents in [docs](https://github.com/philosucker/Text_Holdem/tree/main/docs) directory  
 ---
 ## Development Log
-  
-04.24.2024   
-- Started learning the rules of Texas Holdem. 
-    
-05.14.2024   
-- Started studying FastAPI for backend development  
 
-06.04.2024  
-- Fully mastered the rules of Texas Holdem.  
-   
-06.08.2024  
-- Started Designing the game architecture.   
-- Conceptualized the core logic for the Holdem game application.   
-     
-06.10.2024  
-- Started learning Unity.  
-  
-06.19.2024  
-- Completed Monolithic Architecture design.  
-- Planned to upgrade to MicroService Architecture after development of texas holdem dealer algorithm.  
-  <img src="https://github.com/philosucker/Text_Holdem/assets/65852355/9219939e-fff9-4f3f-885f-d25b718339c0" alt="홀덤-2" width="600" />
-
-06.24.2024
-- Started development of texas holdem dealer algorithm.  
-
-06.25.2024  
-- Completed implementation of “bet”, “raise”, “all-in”, “call”, “check”, and “fold action” algorithms.
-
-06.26.2024  
-- Review “end condition” logic.  
-
-06.27.2024  
-- Review “pot creation and management” logic.  
-
-06.28.2024  
-- Review “end condition” and “showdown” connection logic.  
-
-07.01.2024  
-- Review of “showdown” and “pot award” connection logic.  
-
-07.02.2024  
-- Completed implementation of “Showdown” ranking comparison algorithm.  
-
-07.05.2024  
-- Completed implementation of “end condition” algorithm.  
-- Implement test case DB and test functions and start dealer logic testing.  
-
-07.10.2024    
-- Completed implementation of "side pot" creation and management algorithm.    
-- Completed implementation of  "pot award" algorithm.    
-
-07.16.2024  
-- Started learning socket programming. (WebSocket)  
-
-07.18.2024  
-- Started learning message broker.
-
-07.19.2024  
-- Started learning AsyncIO.  
-
-07.24.2024
-- Completed MicroService Architecture design.  
-  <img src="https://github.com/user-attachments/assets/704826fb-b608-4ad1-9ee6-0b994681e69c" width="1000" />  
-
-07.29.2024    
-- Completed implementation of "dealer algorithm" online version.
+08.03.2024  
+- completed implementaion of reception and floor connection with message broker  
   
 07.30.2024    
 - Concurrency test for CPU bound / disk I/O bound / CPU + diskI/O bound  
 - Planned to additional test for network I/O bound test after back-end development.
 
-08/03.2024  
-- completed implementaion of reception - floor connection
+07.29.2024    
+- Completed implementation of "dealer algorithm" online version.
+
+07.24.2024  
+- Completed MicroService Architecture design.   
+  <img src="[https://github.com/user-attachments/assets/704826fb-b608-4ad1-9ee6-0b994681e69c](https://drive.google.com/file/d/1KJhcOHbYcjOVAxjYo4Il_egAIgoBLSB7/view?usp=sharing)" width="1000" />   
+
+07.19.2024   
+- Started learning AsyncIO.   
+
+07.18.2024    
+- Started learning message broker.  
+
+07.16.2024   
+- Started learning socket programming. (WebSocket)
+
+07.10.2024    
+- Completed implementation of "side pot" creation and management algorithm.    
+- Completed implementation of  "pot award" algorithm.
+
+07.05.2024  
+- Completed implementation of “end condition” algorithm.  
+- Implement test case DB and test functions and start dealer logic testing.
+
+07.02.2024  
+- Completed implementation of “Showdown” ranking comparison algorithm.
+
+07.01.2024  
+- Review of “showdown” and “pot award” connection logic.
   
+06.28.2024  
+- Review “end condition” and “showdown” connection logic.
 
+06.27.2024  
+- Review “pot creation and management” logic.  
+  
+06.26.2024  
+- Review “end condition” logic.  
+  
+06.25.2024  
+- Completed implementation of “bet”, “raise”, “all-in”, “call”, “check”, and “fold action” algorithms.  
+  
+06.24.2024  
+- Started development of texas holdem dealer algorithm.  
 
+06.19.2024  
+- Completed Monolithic Architecture design.  
+- Planned to upgrade to MicroService Architecture after development of texas holdem dealer algorithm.  
+  <img src="[https://github.com/philosucker/Text_Holdem/assets/65852355/9219939e-fff9-4f3f-885f-d25b718339c0](https://drive.google.com/file/d/1m4uUldyJO5p6GIgd-FQAN_9cXuoJmw7v/view?usp=sharing)" alt="홀덤-2" width="600" />  
+  
+06.10.2024  
+- Started learning Unity.  
+  
+06.08.2024  
+- Started Designing the game architecture.   
+- Conceptualized the core logic for the Holdem game application.  
+    
+06.04.2024  
+- Fully mastered the rules of Texas Holdem.  
+  
+05.14.2024   
+- Started studying FastAPI for backend development  
+  
+04.24.2024   
+- Started learning the rules of Texas Holdem.  
