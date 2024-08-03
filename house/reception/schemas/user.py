@@ -1,11 +1,11 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr
 
 # 클라이언트가 보내는 sign up 요청 바디에 대한 요청 스키마
 class SignUpUser(BaseModel):
     email: EmailStr
     password: str
     nick_name: str
-    stk_size: int = Field(default = 100) 
+
 
 # 클라이언트 sign up 요청에 대한 응답 스키마        
 class NickStk(BaseModel):
@@ -42,4 +42,9 @@ class ConnectedUser(BaseModel):
     stk_size: int
 
     class Config:
-        orm_mode = True
+        # orm_mode = True   # Pydantic이 ORM 객체에서 직접 필드를 추출할 수 있다.
+        '''
+        /home/philosucker/anaconda3/envs/holdem/lib/python3.11/site-packages/pydantic/_internal/_config.py:334: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+        '''
+        from_attributes = True  
