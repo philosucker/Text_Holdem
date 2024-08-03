@@ -120,7 +120,13 @@
 - Completed implementation of “bet”, “raise”, “all-in”, “call”, “check”, and “fold action” algorithms.  
   
 ### 06.24.2024 Started development of texas holdem dealer algorithm.  
-
+    - Implementing an algorithm that acts as a dealer in a Texas Hold'em game
+    - Implementing calculations of the types of actions a user can make each turn
+    - Implementing calculations of conditions for ending each street and hand
+    - Implementing calculations of main pot and side pot
+    - Implementing showdown
+    - Implementing pot distribution
+    
 06.19.2024  
 - Completed Monolithic Architecture design.  
 - Planned to upgrade to MicroService Architecture after development of texas holdem dealer algorithm.  
