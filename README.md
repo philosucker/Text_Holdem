@@ -61,21 +61,24 @@
 ## Development Log
 
 08.03.2024  
-- completed implementaion of reception and floor connection with message broker  
-  
+- completed implementaion of reception server and floor server connection with message broker  
+
+07.31.2024  
+- Completed implementation of floor server and client connection via websocket
+
 07.30.2024    
 - Concurrency test for CPU bound / disk I/O bound / CPU + diskI/O bound  
 - Planned to additional test for network I/O bound test after back-end development.
 
 07.29.2024  
-- Completed implementation of "dealer algorithm" online version.
-
+- Completed implementation of dealer server and client connection via websocket
+  
 07.24.2024  
 - Completed MicroService Architecture design.   
   <img src="https://github.com/user-attachments/assets/0a69cabd-80b6-4262-92fe-d7f274054019" width="1000" />   
 
 07.22.2024  
-- Started development of the backend  
+#### Started development of the backend  
     - Implementing reception, floor, and dealer servers  
     - Implementing server-client connections  
     - Implementing communication between servers  
@@ -89,34 +92,37 @@
 07.16.2024   
 - Started learning socket programming. (WebSocket)
 
-    07.10.2024    
-    - Completed implementation of "side pot" creation and management algorithm.    
-    - Completed implementation of  "pot award" algorithm.
-    
-    07.05.2024  
-    - Completed implementation of “end condition” algorithm.  
-    - Implement test case DB and test functions and start dealer logic testing.
-    
-    07.02.2024  
-    - Completed implementation of “Showdown” ranking comparison algorithm.
-    
-    07.01.2024  
-    - Review of “showdown” and “pot award” connection logic.
-      
-    06.28.2024  
-    - Review “end condition” and “showdown” connection logic.
-    
-    06.27.2024  
-    - Review “pot creation and management” logic.  
-      
-    06.26.2024  
-    - Review “end condition” logic.  
-      
-    06.25.2024  
-    - Completed implementation of “bet”, “raise”, “all-in”, “call”, “check”, and “fold action” algorithms.  
+07.12.2024  
+#### Completed implementation of "dealer algorithm"
+  
+07.10.2024    
+- Completed implementation of "side pot" creation and management algorithm.    
+- Completed implementation of  "pot award" algorithm.
+
+07.05.2024  
+- Completed implementation of “end condition” algorithm.  
+- Implement test case DB and test functions and start dealer logic testing.
+
+07.02.2024  
+- Completed implementation of “Showdown” ranking comparison algorithm.
+
+07.01.2024  
+- Review of “showdown” and “pot award” connection logic.
+  
+06.28.2024  
+- Review “end condition” and “showdown” connection logic.
+
+06.27.2024  
+- Review “pot creation and management” logic.  
+  
+06.26.2024  
+- Review “end condition” logic.  
+  
+06.25.2024  
+- Completed implementation of “bet”, “raise”, “all-in”, “call”, “check”, and “fold action” algorithms.  
   
 06.24.2024  
-- Started development of texas holdem dealer algorithm.  
+#### Started development of texas holdem dealer algorithm.  
 
 06.19.2024  
 - Completed Monolithic Architecture design.  
