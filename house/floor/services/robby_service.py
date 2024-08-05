@@ -1,5 +1,5 @@
 from fastapi import WebSocket, WebSocketDisconnect, HTTPException
-from datetime import datetime
+from datetime import datetime, timezone
 from database import models
 from routers import robby_router
 
@@ -27,7 +27,7 @@ async def handle_user_connection(current_user: dict, websocket: WebSocket) -> st
             user_nick=user_nick,
             connection_log=models.Connection(
                 connected=True,
-                entry_time=datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+                entry_time=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
             )
         )
         await user_log.save()
@@ -38,7 +38,7 @@ async def handle_user_connection(current_user: dict, websocket: WebSocket) -> st
             db_user.user_nick = user_nick
         # 연결 로그 업데이트
         db_user.connection_log.connected = True
-        db_user.connection_log.entry_time = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+        db_user.connection_log.entry_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
         await db_user.save()
     
     # 중복 연결 방지: 동일 닉네임으로 다른 연결이 이미 존재하는 경우, 기존 연결 종료
@@ -72,7 +72,7 @@ async def handle_user_disconnection(user_nick: str) -> None:
     db_user = await models.UserLog.find_one({"user_nick": user_nick})
     if db_user:
         db_user.connection_log.connected = False
-        db_user.connection_log.exit_time = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+        db_user.connection_log.exit_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
         await db_user.save()
         del robby_router.connected_clients[user_nick]
     else:
@@ -85,7 +85,7 @@ async def create_table(data: dict, user_nick: str, websocket: WebSocket):
     '''
     # data = {"action" : "create_table", "details" = {"rings" : int, "stakes" : str, "agent" = {"hard" : 2, "easy" :1}}
     table_log = models.TableLog(
-        creation_time = datetime.now().strftime("%Y-%m-%d_%H:%M:%S"),
+        creation_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
         rings = data.get("details").get("rings"),
         stakes = data.get("details").get("stakes"),
         agent = data.get("details").get("agent"),
@@ -173,7 +173,7 @@ async def input_chat(data: dict, user_nick: str):
     chat_log = models.ChatLog(
         user_nick = user_nick,
         content = data.get("content"),
-        time_stamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S"),
+        time_stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
     )
 
     await chat_log.insert()

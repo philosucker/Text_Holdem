@@ -10,7 +10,7 @@ connected_clients = {}
 
 @router.websocket("/robby")
 async def websocket_endpoint(websocket: WebSocket, 
-                             current_user: dict = Depends(authenticate.authenticator.get_current_user)):
+                             current_user: dict = Depends(authenticate.get_current_user)):
     
     user_nick = await robby_service.handle_user_connection(current_user, websocket)
     await websocket.accept() 
@@ -58,8 +58,7 @@ async def websocket_endpoint(websocket: WebSocket,
     except KeyError as e:
         print(f"KeyError: {str(e)}")
     except Exception as e:
-        if user_nick in connected_clients:
-            await robby_service.handle_user_disconnection(user_nick)
+        await robby_service.handle_user_disconnection(user_nick)
         await websocket.close()
         print(f"Unexpected error: {str(e)}")
 

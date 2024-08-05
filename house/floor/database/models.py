@@ -25,7 +25,7 @@ class TableLog(Document):
     now: int = 0
     max: int = rings
     status: str = None # waiting, playing, dismissed
-    new_players: dict[str, int] = Field(default_factory=dict) # {"nick_4" : 1000, "nick_5": 800, "nick_6" : 1500}
+    new_players: dict[str, int] = Field(default_factory=dict) # {"nick_4" : 0, "nick_5": 0, "nick_6" : 0}
     continuing_players: dict[str, int] = Field(default_factory=dict) # {"nick_1" : 100, "nick_2": 2000, "nick_3" : 500}
     determined_positions: dict[str, str] = Field(default_factory=dict) # {"nick_1" : "BB", "nick_2": "CO", "nick_3" : D}
 

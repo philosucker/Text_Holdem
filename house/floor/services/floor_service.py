@@ -1,20 +1,30 @@
 import asyncio
 from fastapi import WebSocket, WebSocketDisconnect
 from database.models import TableLog, ChatLog
-from routers import robby_router
-from services import robby_service
 import json
 import zlib
+
+from routers import robby_router
+from services import robby_service
+from messaging import rabbitmq_consumer, rabbitmq_producer
 
 async def broadcast_table_list():
     while True:
         try:
             # 필터 조건 정의: now < max 이고, status가 "waiting"인 테이블만 선택
             filters = {"now": {"$lt": "max"}, "status": "waiting"}
-            projection = {"table_id": 1, "creation_time": 1, "rings": 1, "stakes": 1, "agent": 1, "now": 1, "max": 1, "status": 1}
+            projection = {"table_id": 1, 
+                          "creation_time": 1, 
+                          "rings": 1, 
+                          "stakes": 1, 
+                          "agent": 1, 
+                          "now": 1, 
+                          "max": 1, 
+                          "status": 1}
 
             # 필터 조건을 사용하여 테이블 로그 검색 (필드 선택 포함)
-            table_logs = await TableLog.find(filters, projection=projection).to_list()
+            table_logs :list[TableLog] = await TableLog.find(filters, projection=projection).to_list()
+ 
             table_list = []
 
             for log in table_logs:
@@ -29,7 +39,7 @@ async def broadcast_table_list():
                     "status": log.status,
                 }
                 table_list.append(table_info)
-
+            
             # 남은 자리 수가 적은 순서대로, 같은 경우 생성 시간 기준으로 정렬
             table_list = sorted(
                 table_list, 
@@ -60,48 +70,111 @@ async def broadcast_table_list():
             print(f"Unexpected error in broadcast_table_list: {e}")
             await asyncio.sleep(1)
 
+class CoreService:
+    
+    def __init__(self):
+        self.producer = None 
+        self.consumer = None
 
-async def broadcast_table_ready():
-    while True:
-        try:
-            # 필터 조건 정의: now == max 이고, status가 "waiting"인 테이블만 선택
-            filters = {"now": {"$eq": "max"}, "status": "waiting"}
-            projection = {"table_id": 1, "now": 1, "max": 1, "new_players": 1, "continuing_players": 1, "status": 1}
+    def set_producer(self, producer):
+        self.producer: rabbitmq_producer.MessageProducer = producer
+    
+    def set_consumer(self, consumer):
+        self.consumer: rabbitmq_consumer.MessageConsumer = consumer
 
-            # 필터 조건을 사용하여 테이블 로그 검색 (필드 선택 포함)
-            ready_tables = await TableLog.find(filters, projection=projection).to_list()
+    async def setting_table(self):
+        while True:
+            try:
+                # 필터 조건 정의: now == max 이고, status가 "waiting"인 테이블만 선택
+                filters = {"now": {"$eq": "max"}, "status": "waiting"}
+                projection = {
+                    "table_id": 1,
+                    "rings": 1,
+                    "stakes": 1,
+                    "agent": 1, # {"hard" : 2, "easy" : 1}
+                    "new_players": 1, # {"nick_4" : 0, "nick_5": 0, "nick_6" : 0}
+                    "continuing_players": 1, # {"nick_1" : 100, "nick_2": 2000, "nick_3" : 500}
+                    "determined_positions": 1, # {"nick_1" : "BB", "nick_2": "CO", "nick_3" : D}
+                }
+                # 필터 조건을 사용하여 테이블 로그 검색 (필드 선택 포함)
+                full_tables: list[TableLog] = await TableLog.find(filters, projection=projection).to_list()
+            
+                # 각 테이블에 대한 작업
+                for log in full_tables:
+                    table_info = {
+                        "table_id": log.table_id,
+                        "rings": log.rings,
+                        "stakes": log.stakes,
+                        "agent": log.agent,
+                        "new_players": log.new_players,
+                        "continuing_players": log.continuing_players,
+                        "determined_positions": log.determined_positions
+                    }
+                    query = {"table_id": table_info["table_id"], "user_nick_list": table_info["new_players"]}
+                    # 1. query를 메시지 브로커의 "request_stk_size_query_queue" 큐로 리셉션 서버에 보내는 함수
+                    await self.producer.request_stk_size_query(query)
 
-            # 각 테이블에 대한 작업
-            for log in ready_tables:
-                # 테이블에 포함된 유저 목록
-                players = list(log.new_players.keys()) + list(log.continuing_players.keys())
-                message = {"Message": "Table Ready", "Table id": str(log.table_id)}
-                compressed_data = zlib.compress(json.dumps(message).encode('utf-8'))
-                count = 0
-                # 일치하는 웹소켓 클라이언트를 찾아 메시지 전송
-                for user_nick in players:
-                    websocket: WebSocket = robby_router.connected_clients.get(user_nick)
-                    if websocket:
-                        try:
-                            await websocket.send_bytes(compressed_data)
-                            count += 1
-                        except WebSocketDisconnect:
-                            await robby_service.handle_user_disconnection(user_nick)
-                        except Exception as e:
-                            print(f"Error sending message to {user_nick}: {e}")
+                    if table_info.get("agent", None):
+                        agent_info = {"table_id": table_info["table_id"], "agent_info": table_info["agent"]}
+                        # 2. agent_info를 메시지 브로커의 "request_agent_queue" 큐로 에이전시 서버에 보내는 함수
+                        await self.producer.request_agent(agent_info)
 
-                # 테이블 상태를 "playing"으로 업데이트
-                if count == len(players):
-                    log.status = "playing"
-                    await log.save()
-                else:
-                    log.now = count
-                    await log.save()
-            await asyncio.sleep(1)  # 주기 조정
+                    message = {"Message": "Table Full", "Table id": str(table_info["table_id"])}
+                    compressed_data = zlib.compress(json.dumps(message).encode('utf-8'))
+                    count = 0
+                    user_nick_list = list(table_info["new_players"]) + list(table_info["determined_positions"])
+                    
+                    # 3. 일치하는 웹소켓 클라이언트를 찾아 메시지 전송
+                    for user_nick in user_nick_list:
+                        websocket: WebSocket = robby_router.connected_clients.get(user_nick)
+                        if websocket:
+                            try:
+                                await websocket.send_bytes(compressed_data)
+                                count += 1
+                            except WebSocketDisconnect:
+                                await robby_service.handle_user_disconnection(user_nick)
+                            except Exception as e:
+                                print(f"Error sending message to {user_nick}: {e}")
+                        else:
+                            # 웹소켓이 없는 경우 table_info["new_players"]와 table_info["determined_positions"]에서 
+                            # user_nick을 키로 갖는 딕셔너리를 제거
+                            if user_nick in table_info["new_players"]:
+                                del log.new_players[user_nick]
+                            elif user_nick in table_info["determined_positions"]:
+                                del log.determined_positions[user_nick]
+                    
+                    if count != len(user_nick_list):
+                        log.now = count
+                        await log.save()
+                        continue
+                    else:
+                        # 3. 리셉션 서버가 1.에서 보낸 메시지를 받아 처리한 후 회신한 메시지를 수신
+                        # 메시지의 테이블 아이디를 확인해서 현재 테이블 번호와 맞는 메시지를 찾을 때까지 대기
+                        while table_info["table_id"] not in self.consumer.user_nick_stk_inbox:
+                            await asyncio.sleep(0.1)
+                        user_nick_stk_dict = self.consumer.user_nick_stk_inbox.pop(table_info["table_id"])
+                        table_info["new_players"] = user_nick_stk_dict
 
-        except Exception as e:
-            print(f"Unexpected error in broadcast_table_ready: {e}")
-            await asyncio.sleep(1)
+                        if table_info.get("agent", None):
+                            # 4. 리셉션 서버가 2.에서 보낸 메시지를 받아 처리한 후 회신한 메시지를 수신
+                            # 메시지의 테이블 아이디를 확인해서 현재 테이블 번호와 맞는 메시지를 찾을 때까지 대기
+                            while table_info["table_id"] not in self.consumer.agent_nick_stk_inbox:
+                                await asyncio.sleep(0.1)
+                            agent_nick_stk_dict = self.consumer.agent_nick_stk_inbox.pop(table_info["table_id"])
+                            table_info["new_players"] = agent_nick_stk_dict
+                        
+                        # 5. table_info를 메시지 브로커의 "table_ready_queue" 큐로 딜러 서버에 보내는 함수
+                        await self.producer.table_ready(table_info)
+ 
+                        # 문제 없이 테이블이 준비되면 테이블 상태를 "playing"으로 업데이트
+                        log.status = "playing"
+                        await log.save()
+                await asyncio.sleep(1)  # 주기 조정
+
+            except Exception as e:
+                print(f"Unexpected error in broadcast_table_ready: {e}")
+                await asyncio.sleep(1)
+
 
 async def broadcast_chat():
     while True:
