@@ -99,13 +99,13 @@ class GameLog(Document):
     start_time: str = None
     end_time: str = None
     players: LogPlayers
-    side_pots = LogSidePots
+    side_pots: LogSidePots
     pot_change: list = None 
-    hand_actions = LogHandActions
-    community_cards = LogCommunityCards
-    best_hands = LogBestHands
-    nuts = LogNuts
-    users_ranking = LogUsersRanking
+    hand_actions: LogHandActions
+    community_cards: LogCommunityCards
+    best_hands: LogBestHands
+    nuts: LogNuts
+    users_ranking: LogUsersRanking
 
     class Settings:
         collection = "game_log"
