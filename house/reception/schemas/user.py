@@ -42,9 +42,4 @@ class ConnectedUser(BaseModel):
     stk_size: int
 
     class Config:
-        # orm_mode = True   # Pydantic이 ORM 객체에서 직접 필드를 추출할 수 있다.
-        '''
-        /home/philosucker/anaconda3/envs/holdem/lib/python3.11/site-packages/pydantic/_internal/_config.py:334: UserWarning: Valid config keys have changed in V2:
-* 'orm_mode' has been renamed to 'from_attributes'
-        '''
         from_attributes = True  

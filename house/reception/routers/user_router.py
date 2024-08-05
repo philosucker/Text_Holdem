@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, status, Request
 # from fastapi.security import OAuth2PasswordRequestForm
-from database import connection, manipulation
-from schemas import user
-from services import user_service
-from authentication import authenticate
+from ..database import connection, manipulation
+from ..schemas import user
+from ..services import user_service
+from ..authentication import authenticate
 
 router = APIRouter()
 

@@ -3,13 +3,13 @@ import uvicorn
 from contextlib import asynccontextmanager
 import asyncio
 
-from messaging import rabbitmq_consumer, rabbitmq_producer
-from utils import key_generator
-from routers import user_router
-from database import connection
+from .messaging import rabbitmq_consumer, rabbitmq_producer
+from .utils import key_generator
+from .routers import user_router
+from .database import connection
 
 @asynccontextmanager
-async def lifespan():
+async def lifespan(app: FastAPI):
     # 애플리케이션이 시작될 때 실행
     key_generator.generate_secret_key(algorithm="HS256")
     await connection.init_db()  # 데이터베이스 연결 및 테이블 생성

@@ -4,12 +4,12 @@ import json
 from dotenv import load_dotenv
 import os
 
-from services import server_service
-from database import connection
-from messaging import rabbitmq_producer
+from ..services import server_service
+from ..database import connection
+from .rabbitmq_producer import MessageProducer
 
 # .env 파일에서 환경 변수를 로드합니다.
-load_dotenv(dotenv_path='house/.env')
+load_dotenv(dotenv_path='./house/.env')
 
 # 환경 변수에서 RabbitMQ URL을 가져옵니다.
 RABBITMQ_SERVER_URL = os.getenv("RABBITMQ_SERVER_URL")
@@ -22,7 +22,7 @@ class MessageConsumer:
 
     def set_producer(self, producer):
 
-        self.producer : rabbitmq_producer.MessageProducer = producer
+        self.producer : MessageProducer = producer
 
     async def start_consuming(self):
 
@@ -54,14 +54,18 @@ class MessageConsumer:
 
         async with message.process():
             query = json.loads(message.body)
-            # query = {"table_id" : str, "user_nick_list" : []}
+            # query = {"table_id" : str, "user_nick_list" : list}
             db = await connection.get_db().__anext__()
-            nick_stk_dict = await server_service.stk_size_query(query, db)
-            response = {
-                "table_id": query["table_id"],
-                "nick_stk_dict": nick_stk_dict
-            }
-            await self.producer.response_stk_size_query(response)
+            try:
+                nick_stk_dict = await server_service.stk_size_query(query, db)
+                response = {
+                    "table_id": query["table_id"],
+                    "nick_stk_dict": nick_stk_dict
+                }
+                await self.producer.response_stk_size_query(response)
+
+            except Exception as e:
+                print(f"Stack size query failed: {e}")
 
     async def process_stk_size_update(self, message: aio_pika.IncomingMessage):
         

@@ -2,9 +2,9 @@ from fastapi import Depends, HTTPException, status, Request
 # from fastapi.security import OAuth2PasswordRequestForm
 from datetime import datetime, timezone
 import time
-from database import manipulation, models
-from authentication import password, jwt_handler
-from schemas import user
+from ..database import manipulation, models
+from ..authentication import password, jwt_handler
+from ..schemas import user
 
 
 async def register(user: user.SignUpUser, db: manipulation.Database) -> str:
@@ -20,13 +20,14 @@ async def register(user: user.SignUpUser, db: manipulation.Database) -> str:
     new_user = models.User(
         email=user.email,
         password=hashed_password,
-        nickname=user.nick_name,
+        nick_name=user.nick_name,
     )
     await db.create_user(new_user)
 
     return f'welcome {user.nick_name}'
 
 async def _notify_user_new_ip(email: str, ip_address: str):
+    pass
     """
     새로운 IP 주소에서 로그인 시도가 발생했음을 사용자에게 알림.
     이메일이나 다른 알림 시스템을 통해 알림을 보낼 수 있습니다.
