@@ -345,10 +345,12 @@ class Dealer(Base):
         game_log = await self._making_game_log()
         return game_log
 
+    '''
+    게임 중 연결이 끊어진 클라이언트가 dealer 서버 웹소켓에 재접속 한 경우
+    DealerManager의 add_connection에서 dealer.reconnecion_handler(reconnection) 을 호출해준다.
+    '''
     async def reconnection_handler(self, reconnection : dict[str, WebSocket]) -> None:
         nick, websocket = list(reconnection.items())[0]
-        if nick in self.connections:
-            del self.connections[nick]
         self.connections[nick] = websocket
 
 
