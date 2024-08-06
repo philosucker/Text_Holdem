@@ -21,8 +21,8 @@ class MessageProducer:
     "table_ready_queue" 딜러
 
     채널1
-    "request_stk_size_update_queue" 리셉션
-
+    "request_user_stk_size_update_queue" 리셉션
+    "request_agent_stk_size_update_queue" 에이전시
     채널2
     "training_data_queue" 에이전시
     '''
@@ -38,13 +38,15 @@ class MessageProducer:
             request_stk_size_query_queue = await channel_1.declare_queue("request_stk_size_query_queue", durable=True)
             request_agent_queue = await channel_1.declare_queue("request_agent_queue", durable=True)
             table_ready_queue = await channel_1.declare_queue("table_ready_queue", durable=True)
-            request_stk_size_update_queue = await channel_1.declare_queue("request_stk_size_update_queue", durable=True)
+            request_user_stk_size_update_queue = await channel_1.declare_queue("request_user_stk_size_update_queue", durable=True)
+            request_agent_stk_size_update_queue = await channel_1.declare_queue("request_agent_stk_size_update_queue", durable=True)
             training_data_queue = await channel_2.declare_queue( "training_data_queue", durable=True)
             
             self.producer_queues["request_stk_size_query_queue"] = request_stk_size_query_queue # to reception
             self.producer_queues["request_agent_queue"] = request_agent_queue # to agency
             self.producer_queues["table_ready_queue"] = table_ready_queue # to dealer
-            self.producer_queues["request_stk_size_update_queue"] = request_stk_size_update_queue # to reception
+            self.producer_queues["request_user_stk_size_update_queue"] = request_user_stk_size_update_queue # to reception
+            self.producer_queues["request_agent_stk_size_update_queue"] = request_agent_stk_size_update_queue # to agency
             self.producer_queues["training_data_queue"] = training_data_queue # to agenct
 
             try:
@@ -73,8 +75,11 @@ class MessageProducer:
     async def table_ready(self, data, priority=10):
         await self._publish_message("table_ready_queue", "channel_1", data, priority)
 
-    async def request_stk_size_update(self, data, priority=8):
-        await self._publish_message("request_stk_size_update_queue", "channel_1", data, priority)
+    async def request_user_stk_size_update(self, data, priority=8):
+        await self._publish_message("request_user_stk_size_update_queue", "channel_1", data, priority)
+
+    async def request_agent_stk_size_update(self, data, priority=8):
+        await self._publish_message("request_user_stk_size_update_queue", "channel_1", data, priority)
 
     # 추후 사용
     async def training_data(self, data, priority=1):

@@ -142,8 +142,12 @@ class MessageConsumer:
 
                 query = {log_players[position]["user_nick"] : log_players[position]["stk_size"] for position in log_players}
                 # 유저 스택사이즈 업데이트 요청
-                await self.producer.request_stk_size_update(query)
+                # 지금 이 쿼리에 일반 유저와 에이전트가 섞여 있다. 에이전트 식별자가 필요함.
+                user_query
+                agent_query
+                await self.producer.request_user_stk_size_update(query)
 
+                await self.producer.request_agent_stk_size_update(query)
                 # TableLog 업데이트
                 table_log = await TableLog.find_one(TableLog.table_id == table_id)
                 if table_log:
@@ -173,6 +177,18 @@ class MessageConsumer:
                 )
                 await game_log.insert()
 
+                food = {}     
+                
+                food["log_players"] = log_players
+                food["log_side_pots"] = log_side_pots
+                food["log_pot_change"] = log_pot_change
+                food["log_hand_actions"] = log_hand_actions
+                food["log_community_cards"] = log_community_cards
+                food["log_best_hands"] = log_best_hands
+                food["log_nuts"] = log_nuts
+                food["log_users_ranking"] = log_users_ranking
+
+                await self.producer.training_data(food)
             except Exception as e:
                 print(f"Error processing game log: {e}")
                 pass
