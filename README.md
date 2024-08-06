@@ -60,6 +60,11 @@
 ---
 ## Development Log
 
+
+08.06.2024  
+- completed implementaition of reception, floor, dealer server algorithms  
+- completed implementaion of floor server and dealer server connection with message broker  
+  
 08.03.2024  
 - completed implementaion of reception server and floor server connection with message broker  
 
@@ -78,7 +83,7 @@
   <img src="https://github.com/user-attachments/assets/0a69cabd-80b6-4262-92fe-d7f274054019" width="1000" />   
 
 ### 07.22.2024 Started development of the backend  
-    - Implementing reception, floor, and dealer servers  
+    - Implementing reception, floor, and dealer server algorithms  
     - Implementing server-client connections  
     - Implementing communication between servers  
    
