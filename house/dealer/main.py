@@ -22,7 +22,6 @@ async def lifespan(app: FastAPI):
     task4 = asyncio.create_task(dealer_manager.result_processor())
     try:
         app.state.dealer_manager = dealer_manager
-        # await asyncio.gather(task1, task2, task3, task4) # 필요한거 맞나?
         yield
     finally:
         task1.cancel()
@@ -30,12 +29,11 @@ async def lifespan(app: FastAPI):
         task3.cancel()
         task4.cancel()
         try:
-            await task1
-            await task2
-            await task3
-            await task4
+            await asyncio.gather(task1, task2, task3, task4)
         except asyncio.CancelledError:
             pass
+        except Exception as e:
+            print(f"Error during shutdown: {e}")
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(dealer_router.router)

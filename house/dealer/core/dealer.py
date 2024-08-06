@@ -16,7 +16,7 @@ class Dealer(Base):
         
         await self._initialize_start_order(street_name)
         # SB와 BB의 블라인드 포스팅은 bet으로 간주
-        self.attack_flag == True
+        self.attack_flag = True
         await self._posting_blind(street_name)
 
         '''

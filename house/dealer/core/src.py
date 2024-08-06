@@ -360,7 +360,7 @@ class Base:
         try:
             websocket : WebSocket = self.connections[current_player]
             await websocket.send_json(message)
-            action = asyncio.wait_for(websocket.receive_json(), timeout=timeout)
+            action = await asyncio.wait_for(websocket.receive_json(), timeout=timeout)
             return action
         except asyncio.TimeoutError:
             return {'fold' : None} 

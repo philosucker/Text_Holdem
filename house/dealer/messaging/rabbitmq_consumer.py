@@ -51,6 +51,6 @@ class MessageConsumer:
             }
             '''
             data = json.loads(message.body)
-            self.table_ready_inbox.put(data)
+            await self.table_ready_inbox.put(data)
 
 
