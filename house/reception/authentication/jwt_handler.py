@@ -9,27 +9,32 @@ from dotenv import load_dotenv
 # .env 파일 로드
 load_dotenv(dotenv_path="./house/.env")
 
+
 def _load_secret_key(algorithm: str):
+    try:
+        if algorithm == "HS256":
+            secret_key = os.getenv("SECRET_KEY")
+            if not secret_key:
+                raise ValueError("SECRET_KEY is not set in the environment variables.")
+            return secret_key
 
-    if algorithm == "HS256":
-        secret_key = os.getenv("SECRET_KEY")
-        if not secret_key:
-            raise ValueError("SECRET_KEY is not set in the environment variables.")
-        return secret_key
+        elif algorithm == "ES256":
+            pem_private_key = os.getenv("PRIVATE_KEY")
+            if not pem_private_key:
+                raise ValueError("PRIVATE_KEY is not set in the environment variables.")
+            private_key = serialization.load_pem_private_key(
+                pem_private_key.encode('utf-8'),
+                password=None
+            )
+            return private_key
+
+        raise ValueError("Unsupported algorithm. Please use 'HS256' or 'ES256'.")
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load secret key"
+        ) from e
     
-    elif algorithm == "ES256":
-        pem_private_key = os.getenv("PRIVATE_KEY")
-        if not pem_private_key:
-            raise ValueError("PRIVATE_KEY is not set in the environment variables.")
-        private_key = serialization.load_pem_private_key(
-            pem_private_key.encode('utf-8'),
-            password=None
-        )
-        return private_key
-
-    raise ValueError("Unsupported algorithm. Please use 'HS256' or 'ES256'.")
-
-
 def _load_public_key(algorithm):
 
     if algorithm == "HS256":
@@ -47,7 +52,32 @@ def _load_public_key(algorithm):
 
     raise ValueError("Unsupported algorithm. Please use 'HS256' or 'ES256'.")
 
+# 개선된 코드
+def _load_secret_key(algorithm: str):
+    try:
+        if algorithm == "HS256":
+            secret_key = os.getenv("SECRET_KEY")
+            if not secret_key:
+                raise ValueError("SECRET_KEY is not set in the environment variables.")
+            return secret_key
 
+        elif algorithm == "ES256":
+            pem_private_key = os.getenv("PRIVATE_KEY")
+            if not pem_private_key:
+                raise ValueError("PRIVATE_KEY is not set in the environment variables.")
+            private_key = serialization.load_pem_private_key(
+                pem_private_key.encode('utf-8'),
+                password=None
+            )
+            return private_key
+
+        raise ValueError("Unsupported algorithm. Please use 'HS256' or 'ES256'.")
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load secret key"
+        ) from e
+        
 def create_access_token(email: str, nick: str, algorithm = "HS256"):
 
     key = _load_secret_key(algorithm)

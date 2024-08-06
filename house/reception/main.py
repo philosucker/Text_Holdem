@@ -27,11 +27,11 @@ async def lifespan(app: FastAPI):
         task1.cancel()
         task2.cancel()
         try:
-            await task1
-            await task2
+            await asyncio.gather(task1, task2)
         except asyncio.CancelledError:
             pass
-
+        except Exception as e:
+            print(f"Error during shutdown: {e}")
 
 app = FastAPI(lifespan=lifespan)
 

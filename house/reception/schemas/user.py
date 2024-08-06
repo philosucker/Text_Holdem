@@ -6,7 +6,6 @@ class SignUpUser(BaseModel):
     password: str
     nick_name: str
 
-
 # 클라이언트 sign up 요청에 대한 응답 스키마        
 class NickStk(BaseModel):
     nick_name: str
