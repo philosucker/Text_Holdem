@@ -8,8 +8,6 @@ from messaging import rabbitmq_consumer, rabbitmq_producer
 from services import floor_service
 from routers import robby_router
 
-
-
 @asynccontextmanager
 async def lifespan():
     await connection.settings.initialize_database()
@@ -37,13 +35,11 @@ async def lifespan():
         task4.cancel()
         task5.cancel()
         try:
-            await task1
-            await task2
-            await task3
-            await task4
-            await task5
+            await asyncio.gather(task1, task2, task3, task4, task5)
         except asyncio.CancelledError:
             pass
+        except Exception as e:
+            print(f"Error during shutdown: {e}")
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(robby_router.router)

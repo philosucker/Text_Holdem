@@ -3,14 +3,12 @@ import asyncio
 import json
 from dotenv import load_dotenv
 import os
-from datetime import datetime
-from collections import deque
-
+from collections import deque, OrderedDict
 from rabbitmq_producer import MessageProducer
 from database.models import TableLog, GameLog 
 
 # .env 파일에서 환경 변수를 로드합니다.
-load_dotenv(dotenv_path='house/.env')
+load_dotenv(dotenv_path='./house/.env')
 
 # 환경 변수에서 RabbitMQ URL을 가져옵니다.
 RABBITMQ_SERVER_URL = os.getenv("RABBITMQ_SERVER_URL")
@@ -24,8 +22,8 @@ class MessageConsumer:
         일단 서버메모리에서 처리하게 하고
         나중에 redis 사용을 고려해 볼 것. 
         '''
-        self.user_nick_stk_inbox = dict()
-        self.agent_nick_stk_inbox = dict()
+        self.user_nick_stk_inbox = OrderedDict()
+        self.agent_nick_stk_inbox = OrderedDict()
         self.producer = None 
 
     def set_producer(self, producer):
@@ -58,6 +56,13 @@ class MessageConsumer:
                 durable=True,
                 arguments={"x-max-priority": 1}  # 우선순위 큐 설정
             )
+            
+            table_failed_queue = await channel_1.declare_queue(
+                "table_failed", 
+                durable=True,
+                arguments={"x-max-priority": 1}  # 우선순위 큐 설정
+            )
+                        
             game_log_queue = await channel_2.declare_queue(
                 "game_log_queue", 
                 durable=True,
@@ -65,7 +70,9 @@ class MessageConsumer:
             )
             await response_stk_size_query_queue.consume(self.process_stk_size_query, no_ack=False) # from reception MessageProducer
             await response_agent_queue(self.process_agent_info, no_ack=False) # from agency
+            await table_failed_queue.consume(self.process_table_update, no_ack=False)  # from dealer
             await game_log_queue.consume(self.process_game_log, no_ack=False)  # from dealer
+            
 
             try:
                 await asyncio.Future()
@@ -84,6 +91,34 @@ class MessageConsumer:
             data = json.loads(message.body)
             self.agent_nick_stk_inbox[data["table_id"]] = data["nick_stk_dict"]
 
+    async def process_table_update(self, message: aio_pika.IncomingMessage):
+        async with message.process():
+            '''
+            data = {
+            "table_id" : str
+            "rings" : int
+            "stakes" : str
+            new_players : dict[str, int]  # {"nick_4" : 1000, "nick_5": 800, "nick_6" : 1500}
+            continuing_players : dict[str, int]  # {"nick_1" : 100, "nick_2": 2000, "nick_3" : 500}
+            determined_positions : dict[str, str] # {"nick_1" : "BB", "nick_2": "CO", "nick_3" : D}
+            }
+            '''
+            try:            
+                data : dict = json.loads(message.body)
+                table_id: str = data.get("table_id")
+                table_log = await TableLog.find_one(TableLog.table_id == table_id)
+                table_log.status = "waiting"
+                table_log.now = len(data["new_players"]) + len(data["continuing_players"])
+                table_log.new_players = data["new_players"]
+                table_log.continuing_players = data["continuing_players"]
+                table_log.determined_positions = data["determined_positions"]
+                
+                await table_log.save()
+                
+            except Exception as e:
+                print(f"Error updating table log: {e}")
+                pass
+            
     async def process_game_log(self, message: aio_pika.IncomingMessage):
         async with message.process():
             data: dict = json.loads(message.body)

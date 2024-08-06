@@ -4,7 +4,7 @@ import json
 from dotenv import load_dotenv
 import os
 # .env 파일에서 환경 변수를 로드합니다.
-load_dotenv(dotenv_path='house/.env')
+load_dotenv(dotenv_path='./house/.env')
 
 # 환경 변수에서 RabbitMQ URL을 가져옵니다.
 RABBITMQ_SERVER_URL = os.getenv("RABBITMQ_SERVER_URL")

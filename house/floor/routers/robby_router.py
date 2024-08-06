@@ -11,9 +11,9 @@ connected_clients = {}
 @router.websocket("/robby")
 async def websocket_endpoint(websocket: WebSocket, 
                              current_user: dict = Depends(authenticate.get_current_user)):
-    
-    user_nick = await robby_service.handle_user_connection(current_user, websocket)
     await websocket.accept() 
+    user_nick = await robby_service.handle_user_connection(current_user, websocket)
+    
     try:
         while True:
             '''

@@ -83,6 +83,16 @@ class CoreService:
         self.consumer: rabbitmq_consumer.MessageConsumer = consumer
 
     async def setting_table(self):
+        '''
+        TableLog에서 게임 시작 가능한 테이블을 찾은뒤
+        해당 테이블의 유저들 스택사이즈를 reception에 요청하고, 
+        유저들에게 dealer 서버에 웹소켓 연결 신청 메시지를 보낸다.
+        모든 유저에게 메시징 완료하면
+        리셉션 서버에서 전달한 해당 테이블의 유저들 스택사이즈를 받아서
+        테이블 정보를 딜러 서버에 보낸다.
+        
+        여기서는 해당 테이블의 유저들이 웹소켓 연결에 모두 성공했는지 확인하지 않는다.
+        '''
         while True:
             try:
                 # 필터 조건 정의: now == max 이고, status가 "waiting"인 테이블만 선택
@@ -98,6 +108,8 @@ class CoreService:
                 }
                 # 필터 조건을 사용하여 테이블 로그 검색 (필드 선택 포함)
                 full_tables: list[TableLog] = await TableLog.find(filters, projection=projection).to_list()
+                # 앱에서 유저들이 테이블 생성, 조회, 선택 취소 등으로 TableLog의 상태가 계속 변하고 있는데
+                # 그 과정 중에 특정 시점에서 끊고 검색을 하게 되는 건가? 이럴 때 문제는 없나?
             
                 # 각 테이블에 대한 작업
                 for log in full_tables:
@@ -151,7 +163,7 @@ class CoreService:
                         # 3. 리셉션 서버가 1.에서 보낸 메시지를 받아 처리한 후 회신한 메시지를 수신
                         # 메시지의 테이블 아이디를 확인해서 현재 테이블 번호와 맞는 메시지를 찾을 때까지 대기
                         while table_info["table_id"] not in self.consumer.user_nick_stk_inbox:
-                            await asyncio.sleep(0.1)
+                            await asyncio.sleep(0.5)
                         user_nick_stk_dict = self.consumer.user_nick_stk_inbox.pop(table_info["table_id"])
                         table_info["new_players"] = user_nick_stk_dict
 
@@ -159,7 +171,7 @@ class CoreService:
                             # 4. 리셉션 서버가 2.에서 보낸 메시지를 받아 처리한 후 회신한 메시지를 수신
                             # 메시지의 테이블 아이디를 확인해서 현재 테이블 번호와 맞는 메시지를 찾을 때까지 대기
                             while table_info["table_id"] not in self.consumer.agent_nick_stk_inbox:
-                                await asyncio.sleep(0.1)
+                                await asyncio.sleep(0.5)
                             agent_nick_stk_dict = self.consumer.agent_nick_stk_inbox.pop(table_info["table_id"])
                             table_info["new_players"] = agent_nick_stk_dict
                         
