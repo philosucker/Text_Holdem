@@ -3,7 +3,6 @@ import json
 from services import robby_service
 from reception.authentication import authenticate
 
-
 router = APIRouter()
 
 connected_clients = {}

@@ -13,39 +13,30 @@ async def broadcast_table_list():
         try:
             # 필터 조건 정의: now < max 이고, status가 "waiting"인 테이블만 선택
             filters = {"now": {"$lt": "max"}, "status": "waiting"}
-            projection = {"table_id": 1, 
-                          "creation_time": 1, 
-                          "rings": 1, 
-                          "stakes": 1, 
-                          "agent": 1, 
-                          "now": 1, 
-                          "max": 1, 
-                          "status": 1}
+            projection = {"table_id": 1, "creation_time": 1, "rings": 1, "stakes": 1, "agent": 1, "now": 1, "max": 1, "status": 1}
 
             # 필터 조건을 사용하여 테이블 로그 검색 (필드 선택 포함)
-            table_logs :list[TableLog] = await TableLog.find(filters, projection=projection).to_list()
- 
-            table_list = []
+            cursor = TableLog.get_motor_collection().find(filters, projection)
+            table_logs = await cursor.to_list(length=None)
 
+            table_list = []
             for log in table_logs:
                 table_info = {
-                    "table_id": log.table_id,
-                    "creation_time": log.creation_time,
-                    "rings": log.rings,
-                    "stakes": log.stakes,
-                    "agent": log.agent,
-                    "now": log.now,
-                    "max": log.max,
-                    "status": log.status,
+                    "table_id": log["table_id"],
+                    "creation_time": log["creation_time"],
+                    "rings": log["rings"],
+                    "stakes": log["stakes"],
+                    "agent": log["agent"],
+                    "now": log["now"],
+                    "max": log["max"],
+                    "status": log["status"],
                 }
                 table_list.append(table_info)
-            
             # 남은 자리 수가 적은 순서대로, 같은 경우 생성 시간 기준으로 정렬
             table_list = sorted(
-                table_list, 
-                key=lambda table_info: (table_info['max'] - table_info['now'], table_info.get('creation_time'))
-            )
-
+                table_list, key=lambda table_info: (table_info['max'] - table_info['now'], table_info.get('creation_time'))
+                )
+            
             # JSON 데이터 압축
             compressed_data = zlib.compress(json.dumps({"Table list": table_list}).encode('utf-8'))
 
@@ -63,8 +54,9 @@ async def broadcast_table_list():
             # 연결이 끊어진 클라이언트 처리
             for user_nick in disconnected_clients:
                 await robby_service.handle_user_disconnection(user_nick)
-
-            await asyncio.sleep(1)  # 주기 조정
+            
+            # 주기 조정
+            await asyncio.sleep(1)  
 
         except Exception as e:
             print(f"Unexpected error in broadcast_table_list: {e}")
@@ -107,7 +99,8 @@ class CoreService:
                     "determined_positions": 1, # {"nick_1" : "BB", "nick_2": "CO", "nick_3" : D}
                 }
                 # 필터 조건을 사용하여 테이블 로그 검색 (필드 선택 포함)
-                full_tables: list[TableLog] = await TableLog.find(filters, projection=projection).to_list()
+                cursor = TableLog.get_motor_collection().find(filters, projection)
+                full_tables: list[TableLog]  = await cursor.to_list(length=None)
                 # 앱에서 유저들이 테이블 생성, 조회, 선택 취소 등으로 TableLog의 상태가 계속 변하고 있는데
                 # 그 과정 중에 특정 시점에서 끊고 검색을 하게 되는 건가? 이럴 때 문제는 없나?
             

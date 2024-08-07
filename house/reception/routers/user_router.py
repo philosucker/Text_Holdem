@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, status, Request
 # from fastapi.security import OAuth2PasswordRequestForm
-from ..database import connection, manipulation
-from ..schemas import user
-from ..services import user_service
-from ..authentication import authenticate
+from database import connection, manipulation
+from schemas import user
+from services import user_service
+from authentication import authenticate
 
 router = APIRouter()
 
@@ -12,12 +12,15 @@ async def register(user: user.SignUpUser,
                    db: manipulation.Database = Depends(connection.get_db)) -> str:
     return await user_service.register(user, db)
 
+
 @router.post("/from_user/sign_in", status_code=status.HTTP_200_OK, response_model=user.Token)
 # async def login(user: OAuth2PasswordRequestForm = Depends(), db: manipulation.Database = Depends(connection.get_db)):
-async def login(user: user.SignInUser, 
-                db: manipulation.Database = Depends(connection.get_db),
-                request: Request = Depends()) -> dict:
-    return await user_service.login(user, db, request)
+@router.post("/from_user/sign_in", status_code=status.HTTP_200_OK, response_model=user.Token)
+async def login(user: user.SignInUser,
+                request: Request,
+                db: manipulation.Database = Depends(connection.get_db)
+                ) -> dict:
+    return await user_service.login(user, request, db)
 
 # 서비스와 라우터를 분리한 경우, 종속성은 라우터에만 주입해도 된다.
 @router.patch("/from_user/update_nick", status_code=status.HTTP_200_OK)
@@ -40,7 +43,7 @@ async def delete_user(user : user.DeleteUser,
     return await user_service.delete_user(user, current_user, db)
 
 # 비밀번호 재설정. 구현 필요
-@router.delete("/from_user/reset_pw ", status_code=status.HTTP_200_OK)
+@router.patch("/from_user/reset_pw ", status_code=status.HTTP_200_OK)
 async def reset_pw(user: user.SignUpUser,
                    db: manipulation.Database = Depends(connection.get_db)):
     pass

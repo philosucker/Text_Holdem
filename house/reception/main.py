@@ -3,10 +3,10 @@ import uvicorn
 from contextlib import asynccontextmanager
 import asyncio
 
-from .messaging import rabbitmq_consumer, rabbitmq_producer
-from .utils import key_generator
-from .routers import user_router
-from .database import connection
+from messaging import rabbitmq_consumer, rabbitmq_producer
+from utils import key_generator
+from routers import user_router
+from database import connection
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

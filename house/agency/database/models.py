@@ -9,7 +9,6 @@ class Agent(BaseModel):
     difficulty : str 
     available : str
 
-
 class ActionDetails(BaseModel):
     action_list: list[str] = Field(default_factory=list)
     pot_contribution: dict[str, list[int]] = Field(default_factory=lambda: {"call": [0], "raise": [0], "all-in": [0], "bet": [0]})

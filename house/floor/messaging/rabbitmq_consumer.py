@@ -4,7 +4,7 @@ import json
 from dotenv import load_dotenv
 import os
 from collections import deque, OrderedDict
-from rabbitmq_producer import MessageProducer
+from messaging import rabbitmq_producer
 from database.models import TableLog, GameLog 
 
 # .env 파일에서 환경 변수를 로드합니다.
@@ -28,7 +28,7 @@ class MessageConsumer:
 
     def set_producer(self, producer):
 
-        self.producer : MessageProducer = producer
+        self.producer : rabbitmq_producer.MessageProducer = producer
 
     '''
     채널1
@@ -73,7 +73,7 @@ class MessageConsumer:
             )
 
             await response_stk_size_query_queue.consume(self.process_stk_size_query, no_ack=False) # from reception 
-            await response_agent_queue(self.process_agent_info, no_ack=False) # from agency
+            await response_agent_queue.consume(self.process_agent_info, no_ack=False) # from agency
             await table_failed_queue.consume(self.process_table_failed, no_ack=False)  # from dealer
             await game_log_queue.consume(self.process_game_log, no_ack=False)  # from dealer
             
@@ -81,7 +81,7 @@ class MessageConsumer:
                 await asyncio.Future()
             finally:
                 await connection.close()
-
+            
     async def process_stk_size_query(self, message: aio_pika.IncomingMessage):
         async with message.process():
             # data = {"table_id": str,  "nick_stk_dict": {}}

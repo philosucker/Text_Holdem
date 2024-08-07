@@ -2,6 +2,7 @@ import secrets
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
 from dotenv import load_dotenv, set_key
+from pathlib import Path
 
 def generate_secret_key(length: int = 64, algorithm: str = "HS256", env_file: str = './house/.env', public_key_file: str = './house/public_key.pem'):
     """
@@ -10,12 +11,20 @@ def generate_secret_key(length: int = 64, algorithm: str = "HS256", env_file: st
     - HS256: 암호화적으로 안전한 URL-safe 비밀 키를 생성하여 저장합니다.
     - ES256: 비밀 키와 공개 키 쌍을 생성하여 비밀 키는 환경 변수에, 공개 키는 파일에 저장합니다.
     """
-    load_dotenv(dotenv_path=env_file)
+    env_path = Path(env_file).resolve()
+    public_key_path = Path(public_key_file).resolve()
+
+    if not env_path.exists():
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        env_path.touch()
+        print(f"Created .env file at {env_path}")
+
+    load_dotenv(dotenv_path=env_path)
     
     if algorithm == "HS256":
         secret_key = secrets.token_urlsafe(length)
-        set_key(env_file, "SECRET_KEY", secret_key)
-        print(f"SECRET_KEY saved to environment variable in {env_file}")
+        set_key(env_path, "SECRET_KEY", secret_key)
+        print(f"SECRET_KEY saved to environment variable in {env_path}")
 
     elif algorithm == "ES256":
         # 비밀 키 생성
@@ -34,15 +43,18 @@ def generate_secret_key(length: int = 64, algorithm: str = "HS256", env_file: st
         )
         
         # 비밀 키를 환경 변수에 저장 (환경 변수 파일에 저장)
-        set_key(env_file, "PRIVATE_KEY", private_key_pem.decode('utf-8'))
-        print(f"PRIVATE_KEY saved to environment variable in {env_file}")
+        set_key(env_path, "PRIVATE_KEY", private_key_pem.decode('utf-8'))
+        print(f"PRIVATE_KEY saved to environment variable in {env_path}")
         
         # 공개 키를 별도의 파일에 저장
-        with open(public_key_file, 'wb') as f:
+        public_key_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(public_key_path, 'wb') as f:
             f.write(public_key_pem)
-        print(f"Public key saved to file: {public_key_file}")
+        print(f"Public key saved to file: {public_key_path}")
 
     else:
         raise ValueError("Unsupported algorithm. Please use 'HS256' or 'ES256'.")
 
-# generate_secret_key(algorithm="ES256")
+# 함수 호출
+if __name__ == "__main__":
+    generate_secret_key(algorithm="ES256")

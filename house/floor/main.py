@@ -2,15 +2,21 @@ import uvicorn
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import asyncio
+import logging
 
 from database import connection
 from messaging import rabbitmq_consumer, rabbitmq_producer
 from services import floor_service
 from routers import robby_router
 
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
+
 @asynccontextmanager
-async def lifespan():
-    await connection.settings.initialize_database()
+async def lifespan(app : FastAPI):
+    db_client = await connection.init_db()
+    app.state.db_client = db_client  # 데이터베이스 클라이언트를 애플리케이션 상태에 저장
+    
     message_consumer = rabbitmq_consumer.MessageConsumer()
     message_producer = rabbitmq_producer.MessageProducer()
     message_consumer.set_producer(message_producer)
@@ -26,7 +32,7 @@ async def lifespan():
         yield
     finally:
         print("Closing database connection...")
-        await connection.settings.close_database()
+        await connection.close_db(db_client)
         
         # 메시지 브로커 종료
         task1.cancel()
@@ -34,15 +40,25 @@ async def lifespan():
         task3.cancel()
         task4.cancel()
         task5.cancel()
-        try:
-            await asyncio.gather(task1, task2, task3, task4, task5)
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            print(f"Error during shutdown: {e}")
+        # try:
+        #     await asyncio.gather(task1, task2, task3, task4, task5)
+        # except asyncio.CancelledError:
+        #     pass
+        # except Exception as e:
+        #     print(f"Error during shutdown: {e}")
+
+        tasks = [task1, task2, task3, task4, task5]
+        for task in tasks:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                print(f"Error during shutdown: {e}")
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(robby_router.router)
 
 if __name__ == '__main__':
     uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=True)
+

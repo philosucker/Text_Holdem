@@ -3,7 +3,7 @@ import asyncio
 import json
 from dotenv import load_dotenv
 import os
-from collections import OrderedDict
+
 # .env 파일에서 환경 변수를 로드합니다.
 load_dotenv(dotenv_path='./house/.env')
 

@@ -1,5 +1,5 @@
 from fastapi import WebSocket
-from src import Base
+from core.src import Base
 
 class Dealer(Base):
 

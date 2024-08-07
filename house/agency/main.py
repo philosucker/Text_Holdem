@@ -6,9 +6,11 @@ import asyncio
 from messaging import rabbitmq_consumer, rabbitmq_producer
 from services import agency_service
 from routers import agency_router
+from database import connection
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    db_client = await connection.init_db()
     agent_manager = agency_service.AgentManager()
     message_consumer = rabbitmq_consumer.MessageConsumer()
     message_producer = rabbitmq_producer.MessageProducer()
@@ -23,6 +25,7 @@ async def lifespan(app: FastAPI):
         app.state.agent_manager = agent_manager
         yield
     finally:
+        await connection.close_db(db_client)
         task1.cancel()
         task2.cancel()
         try:

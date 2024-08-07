@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status
-from ..database import manipulation
-from ..schemas import floor
+from database import manipulation
+from schemas import floor
 
 async def stk_size_query(table_info: floor.UserNickList, db: manipulation.Database) -> dict:
     user_nick_list = table_info.user_nick_list

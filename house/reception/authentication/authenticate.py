@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from ..authentication.jwt_handler import verify_access_token
+from reception.authentication import jwt_handler
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/from_user/sign_in")
 
@@ -11,7 +11,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        return verify_access_token(token)
+        return jwt_handler.verify_access_token(token)
 
     except HTTPException:
         raise credentials_exception

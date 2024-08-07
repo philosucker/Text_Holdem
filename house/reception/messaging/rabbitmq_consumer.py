@@ -4,9 +4,9 @@ import json
 from dotenv import load_dotenv
 import os
 
-from ..services import server_service
-from ..database import connection
-from .rabbitmq_producer import MessageProducer
+from services import server_service
+from database import connection
+from messaging import rabbitmq_producer
 
 # .env 파일에서 환경 변수를 로드합니다.
 load_dotenv(dotenv_path='./house/.env')
@@ -22,7 +22,7 @@ class MessageConsumer:
 
     def set_producer(self, producer):
 
-        self.producer : MessageProducer = producer
+        self.producer : rabbitmq_producer.MessageProducer = producer
 
     async def start_consuming(self):
 

@@ -3,17 +3,16 @@ from fastapi import Depends, HTTPException, status, Request
 from datetime import datetime, timezone
 import time
 import re
-from ..database import manipulation, models
-from ..authentication import password, jwt_handler
-from ..schemas import user
+from database import manipulation, models
+from authentication import password, jwt_handler
+from schemas import user
 
 
 async def register(user: user.SignUpUser, db: manipulation.Database) -> str:
     db_user = await db.get_user_by_email(user.email)
     if db_user:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered.")
-
-# 닉네임 특수문자 검사
+    
     if re.search(r'[!@#$%^&*]+', user.nick_name):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nickname cannot contain special characters: !@#$%^&*")
 
@@ -41,7 +40,7 @@ async def _notify_user_new_ip(email: str, ip_address: str):
     print(f"Notification: New IP address {ip_address} detected for user {email}")
 
 # async def login(user: OAuth2PasswordRequestForm = Depends(), db: manipulation.Database = Depends(connection.get_db)):
-async def login(user: user.SignInUser, db: manipulation.Database, request: Request) -> dict:
+async def login(user: user.SignInUser, request: Request, db: manipulation.Database) -> dict:
     db_user = await db.get_user_by_email(user.email)
     if not db_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User does not exist.")
@@ -96,6 +95,9 @@ async def update_nick(new_nick: user.UpdateNick, current_user : dict,  db: manip
     db_user = await db.get_user_by_email(current_user["user_email"])
     if not db_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication is required.")
+
+    if re.search(r'[!@#$%^&*]+', user.nick_name):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nickname cannot contain special characters: !@#$%^&*")
     
     existing_nick = await db.get_user_by_nick(new_nick.nick_name)
     if existing_nick:

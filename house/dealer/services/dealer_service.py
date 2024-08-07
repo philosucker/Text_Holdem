@@ -4,7 +4,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 from schemas import user
 from messaging import rabbitmq_consumer, rabbitmq_producer
-from ..core import dealer
+from core import dealer
 
 def run_async(func, *args):
     return asyncio.run(func(*args))

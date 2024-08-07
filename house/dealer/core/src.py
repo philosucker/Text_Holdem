@@ -747,9 +747,9 @@ class Base:
                 best_hands_dict[rank_name].append(hand)
 
         # 가장 높은 핸드 조합 선택
-        best_hand = max(best_hands_dict[best_rank_name], key=lambda hand: [await self._card_rank(card) for card in hand])
+        best_hand = max(best_hands_dict[best_rank_name], key=lambda hand: [self._card_rank(card) for card in hand])
         remaining_cards = [card for card in live_hands if card not in best_hand]
-        best_kicker = sorted(remaining_cards, key=await self._card_rank, reverse=True)
+        best_kicker = sorted(remaining_cards, key=self._card_rank, reverse=True)
 
         kicker_mapping = {
             "one_pair": 3,
@@ -773,13 +773,13 @@ class Base:
                 return len(set(suits)) == 1
 
         async def _straight(cards):
-            ranks = sorted(set(await self._card_rank(card) for card in cards), reverse=True)
+            ranks = sorted(set(self._card_rank(card) for card in cards), reverse=True)
             for i in range(len(ranks) - 4):
                 if ranks[i] - ranks[i + 4] == 4:
                     return True
             return False
 
-        cards = sorted(cards, key=await self._card_rank, reverse=True)
+        cards = sorted(cards, key=self._card_rank, reverse=True)
         ranks = [card[0] for card in cards]
         rank_counts = Counter(ranks)
         counts = sorted(rank_counts.values(), reverse=True)
@@ -808,9 +808,9 @@ class Base:
             return "flush", cards[:5]
 
         if made_straight:
-            straight = sorted(set(cards), key=await self._card_rank, reverse=True)
+            straight = sorted(set(cards), key=self._card_rank, reverse=True)
             for i in range(len(straight) - 4):
-                if await self._card_rank(straight[i]) - await self._card_rank(straight[i + 4]) == 4:
+                if self._card_rank(straight[i]) - self._card_rank(straight[i + 4]) == 4:
                     return "straight", straight[i:i + 5]
 
         if counts == [3, 1, 1]:
@@ -832,7 +832,7 @@ class Base:
 
         return "high_card", cards[:5]
 
-    async def _card_rank(self, card : str) -> int:
+    def _card_rank(self, card : str) -> int:
         '''
         종류 : 리턴값이 있는 함수
         기능 : 카드의 숫자 랭크 파워를 반환
@@ -870,8 +870,8 @@ class Base:
 
         # 카드 랭크 비교
         for i in range(compare_count):
-            max_rank = max(await self._card_rank(hand[best_rank_name][i]) for hand in best_hands)
-            best_hands = [hand for hand in best_hands if await self._card_rank(hand[best_rank_name][i]) == max_rank]
+            max_rank = max(self._card_rank(hand[best_rank_name][i]) for hand in best_hands)
+            best_hands = [hand for hand in best_hands if self._card_rank(hand[best_rank_name][i]) == max_rank]
             if len(best_hands) == 1:
                 break
 
@@ -879,8 +879,8 @@ class Base:
         if len(best_hands) > 1 and any(hand['kicker'] for hand in best_hands):
             max_kicker_length = max(len(hand['kicker']) for hand in best_hands)
             for i in range(max_kicker_length):
-                max_kicker_rank = max(await self._card_rank(hand['kicker'][i]) for hand in best_hands if len(hand['kicker']) > i)
-                best_hands = [hand for hand in best_hands if len(hand['kicker']) > i and await self._card_rank(hand['kicker'][i]) == max_kicker_rank]
+                max_kicker_rank = max(self._card_rank(hand['kicker'][i]) for hand in best_hands if len(hand['kicker']) > i)
+                best_hands = [hand for hand in best_hands if len(hand['kicker']) > i and self._card_rank(hand['kicker'][i]) == max_kicker_rank]
                 if len(best_hands) == 1:
                     break
                 
@@ -894,7 +894,7 @@ class Base:
         기능 : live hands의 쇼다운 결과 무승부는 튜플로 묶은 카드 랭크 순위 오름차순 리스트를 반환
         목적 : 로그 작성용
         '''
-        async def _hand_key(position : str) -> tuple:
+        def _hand_key(position : str) -> tuple:
             '''
             종류 : 리턴값이 있는 함수
             기능 : self.log_best_hands 에서 핸드의 파워가 강력한 순서로 해당 핸드를 가진 유저의 포지션을 내림차순 정렬하기 위해 다음 순서의 비교 기준을 튜플로 반환
@@ -903,13 +903,13 @@ class Base:
             '''
             hand_name = next(iter(self.log_best_hands[position]))
             hand_combinations = self.log_best_hands[position][hand_name]
-            card_ranks = [await self._card_rank(card) for card in hand_combinations]
-            kicker_ranks = [await self._card_rank(card) for card in self.log_best_hands[position].get('kicker', [])]
+            card_ranks = [self._card_rank(card) for card in hand_combinations]
+            kicker_ranks = [self._card_rank(card) for card in self.log_best_hands[position].get('kicker', [])]
 
             return (self.hand_power[hand_name], card_ranks, kicker_ranks)
         
         positions = list(self.log_best_hands.keys())
-        users_ranking_list = sorted(positions, key=lambda position: await _hand_key(position), reverse=True)
+        users_ranking_list = sorted(positions, key=lambda position: _hand_key(position), reverse=True)
         
         tied_players = []
         ranked_users = []
@@ -918,7 +918,7 @@ class Base:
         current_tie_group = []
 
         for pos in users_ranking_list:
-            current_key = await _hand_key(pos)
+            current_key = _hand_key(pos)
 
             if previous_key is not None and current_key == previous_key:
                 current_tie_group.append(pos)

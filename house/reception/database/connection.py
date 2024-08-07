@@ -1,12 +1,12 @@
 import os
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from . import manipulation
+from database import manipulation
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path="./house/.env")
 
-DATABASE_URL = os.getenv("SQL_USER_DATABASE_URL")
+DATABASE_URL = os.getenv("RECEPTION_DATABASE_URL")
 
 connect_args = {"check_same_thread": False}
 
