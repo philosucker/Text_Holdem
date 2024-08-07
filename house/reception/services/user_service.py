@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, status, Request
 # from fastapi.security import OAuth2PasswordRequestForm
 from datetime import datetime, timezone
 import time
+import re
 from ..database import manipulation, models
 from ..authentication import password, jwt_handler
 from ..schemas import user
@@ -11,7 +12,11 @@ async def register(user: user.SignUpUser, db: manipulation.Database) -> str:
     db_user = await db.get_user_by_email(user.email)
     if db_user:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered.")
-    
+
+# 닉네임 특수문자 검사
+    if re.search(r'[!@#$%^&*]+', user.nick_name):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nickname cannot contain special characters: !@#$%^&*")
+
     existing_nick = await db.get_user_by_nick(user.nick_name)
     if existing_nick:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nickname already taken.")

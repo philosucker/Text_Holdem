@@ -34,16 +34,17 @@ class MessageProducer:
             finally:
                 await connection.close()
     
-    async def response_stk_size_query(self, data):
+    async def _publish_message(self, queue_name, channel_name, data, priority):
         try:
-            # data = {"table_id": str, "nick_stk_dict": dict}
             message = aio_pika.Message(
                 body=json.dumps(data).encode(),
-                priority=10
+                priority=priority  # 우선순위 설정
             )
-            channel : aio_pika.Channel = self.producer_channel["channel_1"]
-            queue : aio_pika.Queue = self.producer_queues["response_stk_size_query_queue"]
-
+            channel: aio_pika.Channel = self.producer_channel[channel_name]
+            queue: aio_pika.Queue = self.producer_queues[queue_name]
             await channel.default_exchange.publish(message, routing_key=queue.name)
         except Exception as e:
-            print(f"Failed to send message: {e}")
+            print(f"Failed to send message to {queue_name}: {e}")
+
+    async def response_stk_size_query(self, data, priority=10):
+        await self._publish_message("response_stk_size_query_queue", "channel_1", data, priority)

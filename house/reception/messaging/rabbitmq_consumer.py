@@ -28,15 +28,16 @@ class MessageConsumer:
 
         connection = await aio_pika.connect_robust(RABBITMQ_SERVER_URL)
         async with connection:
-            channel = await connection.channel()
-            await channel.set_qos(prefetch_count=1)
-            request_stk_size_query_queue = await channel.declare_queue(
+            channel_1 = await connection.channel()
+            await channel_1.set_qos(prefetch_count=1)
+            
+            request_stk_size_query_queue = await channel_1.declare_queue(
                 "request_stk_size_query_queue", 
                 durable=True,
                 arguments={"x-max-priority": 10}  
             )
-            request_stk_size_update_queue = await channel.declare_queue(
-                "request_stk_size_update_queue",
+            request_stk_size_update_queue = await channel_1.declare_queue(
+                "request_user_stk_size_update_queue",
                 durable=True,
                 arguments={"x-max-priority": 1} 
             )
