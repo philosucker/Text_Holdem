@@ -22,10 +22,11 @@ class MessageProducer:
             channel_2 = await connection.channel()
             self.producer_channel["channel_1"] = channel_1
             self.producer_channel["channel_2"] = channel_2
-            game_log_queue = await channel_1.declare_queue("game_log_queue", durable=True)
-            table_failed = await channel_2.declare_queue("table_failed", durable=True)
-            self.producer_queues["table_failed"] = table_failed # to floor
-            self.producer_queues["game_log_queue"] = game_log_queue
+
+            game_log_queue = await channel_1.declare_queue("table_failed", durable=True)  # to floor
+            table_failed = await channel_2.declare_queue("game_log_queue", durable=True)  # to floor
+            self.producer_queues["table_failed"] = table_failed
+            self.producer_queues["game_log_queue"] = game_log_queue 
             try:
                 await asyncio.Future()
             finally:

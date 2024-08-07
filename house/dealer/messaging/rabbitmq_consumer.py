@@ -45,9 +45,9 @@ class MessageConsumer:
             "table_id" : str
             "rings" : int
             "stakes" : str
-            new_players : dict[str, int]  # {"nick_4" : 1000, "nick_5": 800, "nick_6" : 1500}
-            continuing_players : dict[str, int]  # {"nick_1" : 100, "nick_2": 2000, "nick_3" : 500}
-            determined_positions : dict[str, str] # {"nick_1" : "BB", "nick_2": "CO", "nick_3" : D}
+            "new_players" : dict[str, int]  # {"nick_4" : 1000, "nick_5": 800, "nick_6" : 1500}
+            "continuing_players" : dict[str, int]  # {"nick_1" : 100, "nick_2": 2000, "nick_3" : 500}
+            "determined_positions" : dict[str, str] # {"nick_1" : "BB", "nick_2": "CO", "nick_3" : D}
             }
             '''
             data = json.loads(message.body)
