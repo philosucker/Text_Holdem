@@ -43,8 +43,8 @@ class MessageConsumer:
                 arguments={"x-max-priority": 10}  # 우선순위 큐 설정
             )
 
-            response_stk_size_update_queue = await channel_1.declare_queue(
-                "response_stk_size_update_queue", 
+            request_stk_size_update_queue = await channel_1.declare_queue(
+                "request_agent_stk_size_update_queue", 
                 durable=True,
                 arguments={"x-max-priority": 10}  # 우선순위 큐 설정
             )
@@ -56,7 +56,7 @@ class MessageConsumer:
             )
 
             await request_agent_queue.consume(self.process_request_agent, no_ack=False)  # from floor
-            await response_stk_size_update_queue(self.process_stk_size_update, no_ack=False)  # from floor
+            await request_stk_size_update_queue(self.process_stk_size_update, no_ack=False)  # from floor
             await training_data_queue.consume(self.process_training_data, no_ack=False)  # from floor
             
             try:
@@ -66,17 +66,22 @@ class MessageConsumer:
 
     async def process_request_agent(self, message: aio_pika.IncomingMessage):
         async with message.process():
-            # data = {"table_id": str,  "nick_stk_dict": {}}
+            # data = {"table_id": str, "agent_info": {"hard" : 2, "easy" : }}
             data = json.loads(message.body)
-            '''
-            data= {"table_id": str, "agent_info": {"hard" : 2, "easy" : }}
-            '''
+
             self.agents[data["table_id"]] = data["agent_info"]
-            self.producer.response_agent()
+
+            '''
+            floor의 에이전트 요청을 받았을 때
+            각 난이도에 따른 수량에 맞는 에이전트를 어떻게 만들어서 
+            self.producer.response_agent(data) 함수 호출로 floor에게 전달할지 구현 필요.
+            '''
+            self.producer.response_agent(data)
 
     async def process_stk_size_update(self, message: aio_pika.IncomingMessage):
         async with message.process():
             try:
+                # data = {"user_nick" : str, "stk_size" : int}
                 data : dict = json.loads(message.body)
 
             except Exception as e:
