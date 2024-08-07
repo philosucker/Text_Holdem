@@ -36,6 +36,9 @@ class MessageConsumer:
     "response_agent_queue" 에이전시
 
     채널2
+    "table_failed_queue" 딜러
+
+    채널3
     "game_log_queue" 딜러
     '''
     async def start_consuming(self):
@@ -43,8 +46,10 @@ class MessageConsumer:
         async with connection:
             channel_1 = await connection.channel()
             channel_2 = await connection.channel()
+            channel_3 = await connection.channel()
             await channel_1.set_qos(prefetch_count=1)
             await channel_2.set_qos(prefetch_count=1)
+            await channel_3.set_qos(prefetch_count=1)
 
             response_stk_size_query_queue = await channel_1.declare_queue(
                 "response_stk_size_query_queue", 
@@ -54,26 +59,24 @@ class MessageConsumer:
             response_agent_queue = await channel_1.declare_queue(
                 "response_agent_queue", 
                 durable=True,
-                arguments={"x-max-priority": 1}  # 우선순위 큐 설정
-            )
-            
-            table_failed_queue = await channel_1.declare_queue(
+                arguments={"x-max-priority": 1}  
+            )           
+            table_failed_queue = await channel_2.declare_queue(
                 "table_failed", 
                 durable=True,
-                arguments={"x-max-priority": 1}  # 우선순위 큐 설정
-            )
-                        
-            game_log_queue = await channel_2.declare_queue(
+                arguments={"x-max-priority": 1}  
+            )                    
+            game_log_queue = await channel_3.declare_queue(
                 "game_log_queue", 
                 durable=True,
-                arguments={"x-max-priority": 1}  # 우선순위 큐 설정
+                arguments={"x-max-priority": 1} 
             )
-            await response_stk_size_query_queue.consume(self.process_stk_size_query, no_ack=False) # from reception MessageProducer
+
+            await response_stk_size_query_queue.consume(self.process_stk_size_query, no_ack=False) # from reception 
             await response_agent_queue(self.process_agent_info, no_ack=False) # from agency
-            await table_failed_queue.consume(self.process_table_update, no_ack=False)  # from dealer
+            await table_failed_queue.consume(self.process_table_failed, no_ack=False)  # from dealer
             await game_log_queue.consume(self.process_game_log, no_ack=False)  # from dealer
             
-
             try:
                 await asyncio.Future()
             finally:
@@ -91,7 +94,7 @@ class MessageConsumer:
             data = json.loads(message.body)
             self.agent_nick_stk_inbox[data["table_id"]] = data["nick_stk_dict"]
 
-    async def process_table_update(self, message: aio_pika.IncomingMessage):
+    async def process_table_failed(self, message: aio_pika.IncomingMessage):
         async with message.process():
             '''
             data = {
@@ -139,16 +142,19 @@ class MessageConsumer:
                 log_nuts : dict = data.get("log_nuts")  # 쇼다운 결과 넛츠
                 log_users_ranking : deque = data.get("log_users_ranking")  # 쇼다운 결과 핸즈 랭킹
 
+                special_chars = set("!@#$%^&*")
+                agent_query = {}
+                user_query = {}
+                for position in log_players:
+                    nick = log_players[position]["user_nick"]
+                    stk_size = log_players[position]["stk_size"]
+                    if any(char in special_chars for char in nick):
+                        agent_query[nick] = stk_size
+                    else:
+                        user_query[nick] = stk_size
+                await self.producer.request_user_stk_size_update(user_query)
+                await self.producer.request_agent_stk_size_update(agent_query)
 
-                query = {log_players[position]["user_nick"] : log_players[position]["stk_size"] for position in log_players}
-                # 유저 스택사이즈 업데이트 요청
-                # 지금 이 쿼리에 일반 유저와 에이전트가 섞여 있다. 에이전트 식별자가 필요함.
-                user_query
-                agent_query
-                await self.producer.request_user_stk_size_update(query)
-
-                await self.producer.request_agent_stk_size_update(query)
-                # TableLog 업데이트
                 table_log = await TableLog.find_one(TableLog.table_id == table_id)
                 if table_log:
                     if not continuing_players:

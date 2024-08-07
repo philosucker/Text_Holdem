@@ -17,13 +17,16 @@ class MessageProducer:
     '''
     채널1
     "request_stk_size_query_queue" 리셉션
-    "request_agent_queue" 에이전시
+    "request_user_stk_size_update_queue" 리셉션
+
+    채널2
     "table_ready_queue" 딜러
 
-    채널1
-    "request_user_stk_size_update_queue" 리셉션
+    채널3
+    "request_agent_queue" 에이전시
     "request_agent_stk_size_update_queue" 에이전시
-    채널2
+
+    채널4
     "training_data_queue" 에이전시
     '''
     async def start_producing(self):
@@ -31,16 +34,20 @@ class MessageProducer:
         async with connection:
             channel_1 = await connection.channel()
             channel_2 = await connection.channel()
+            channel_3 = await connection.channel()
+            channel_4 = await connection.channel()
 
-            self.producer_channel["channel_1"] = channel_1
-            self.producer_channel["channel_2"] = channel_2
+            self.producer_channel["channel_1"] = channel_1 # to reception
+            self.producer_channel["channel_2"] = channel_2 # to dealer
+            self.producer_channel["channel_3"] = channel_3 # to agency
+            self.producer_channel["channel_4"] = channel_4 # to agency
 
             request_stk_size_query_queue = await channel_1.declare_queue("request_stk_size_query_queue", durable=True)
-            request_agent_queue = await channel_1.declare_queue("request_agent_queue", durable=True)
-            table_ready_queue = await channel_1.declare_queue("table_ready_queue", durable=True)
             request_user_stk_size_update_queue = await channel_1.declare_queue("request_user_stk_size_update_queue", durable=True)
-            request_agent_stk_size_update_queue = await channel_1.declare_queue("request_agent_stk_size_update_queue", durable=True)
-            training_data_queue = await channel_2.declare_queue( "training_data_queue", durable=True)
+            table_ready_queue = await channel_2.declare_queue("table_ready_queue", durable=True)
+            request_agent_queue = await channel_3.declare_queue("request_agent_queue", durable=True)
+            request_agent_stk_size_update_queue = await channel_3.declare_queue("request_agent_stk_size_update_queue", durable=True)
+            training_data_queue = await channel_4.declare_queue( "training_data_queue", durable=True)
             
             self.producer_queues["request_stk_size_query_queue"] = request_stk_size_query_queue # to reception
             self.producer_queues["request_agent_queue"] = request_agent_queue # to agency
