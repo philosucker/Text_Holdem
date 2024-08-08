@@ -32,20 +32,17 @@ class MessageConsumer:
             await channel_1.set_qos(prefetch_count=1)
             
             request_stk_size_query_queue = await channel_1.declare_queue(
-                "request_stk_size_query_queue", 
-                durable=True,
+                "request_stk_size_query_queue", durable=True,
                 arguments={"x-max-priority": 10}  
             )
             request_stk_size_update_queue = await channel_1.declare_queue(
-                "request_user_stk_size_update_queue",
-                durable=True,
-                arguments={"x-max-priority": 1} 
+                "request_user_stk_size_update_queue", durable=True,
+                arguments={"x-max-priority": 10} 
             )
 
             await request_stk_size_query_queue.consume(self.process_stk_size_query, no_ack=False)
             await request_stk_size_update_queue.consume(self.process_stk_size_update, no_ack=False)
 
-            print(" [*] Waiting for messages. To exit press CTRL+C")
             try:
                 await asyncio.Future()
             finally:

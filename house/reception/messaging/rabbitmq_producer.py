@@ -26,6 +26,7 @@ class MessageProducer:
 
             response_stk_size_query_queue = await channel_1.declare_queue(
                 "response_stk_size_query_queue",
+                arguments={"x-max-priority": 10},
                 durable=True)
             
             self.producer_queues["response_stk_size_query_queue"] = response_stk_size_query_queue
