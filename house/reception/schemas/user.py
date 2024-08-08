@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
+from datetime import datetime
 
 # 클라이언트가 보내는 sign up 요청 바디에 대한 요청 스키마
 class SignUpUser(BaseModel):
@@ -20,6 +21,7 @@ class SignInUser(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    message : str | None
 
 # 클라이언트 update nick 요청에 대한 요청 스키마
 class UpdateNick(BaseModel):
@@ -33,12 +35,22 @@ class UpdatePW(BaseModel):
 class DeleteUser(BaseModel):
     email: EmailStr
 
-# 관리자 connected user 리스트 요청에 대한 스키마
-class ConnectedUser(BaseModel):
-    id: int
-    email: str
-    nick_name: str
-    stk_size: int
+# 클라이언트 reset pw 요청에 대한 스키마
+class Reset(BaseModel):
+    email: EmailStr
 
-    class Config:
-        from_attributes = True  
+# 관리자 get all user 요청에 대한 스키마
+class AllUser(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id : int
+    email : str
+    password : str
+    nick_name : str
+    stk_size : int
+    last_login_ip : str | None
+    failed_login_attempts : int
+    unlock_time : datetime | None
+    
+    
+

@@ -1,5 +1,4 @@
 from fastapi import Depends, HTTPException, status, Request
-# from fastapi.security import OAuth2PasswordRequestForm
 from datetime import datetime, timezone
 import time
 import re
@@ -26,9 +25,9 @@ async def register(user: user.SignUpUser, db: manipulation.Database) -> str:
         password=hashed_password,
         nick_name=user.nick_name,
     )
-    await db.create_user(new_user)
+    created_user = await db.create_user(new_user)
 
-    return f'welcome {user.nick_name}'
+    return {"nick_name" : created_user.nick_name, "stk_size" : created_user.stk_size}
 
 async def _notify_user_new_ip(email: str, ip_address: str):
     pass
@@ -39,7 +38,7 @@ async def _notify_user_new_ip(email: str, ip_address: str):
     # 이메일 전송 또는 다른 알림 방법 구현
     print(f"Notification: New IP address {ip_address} detected for user {email}")
 
-# async def login(user: OAuth2PasswordRequestForm = Depends(), db: manipulation.Database = Depends(connection.get_db)):
+
 async def login(user: user.SignInUser, request: Request, db: manipulation.Database) -> dict:
     db_user = await db.get_user_by_email(user.email)
     if not db_user:
@@ -47,6 +46,10 @@ async def login(user: user.SignInUser, request: Request, db: manipulation.Databa
 
     # 계정 잠금 확인
     current_time = datetime.now(timezone.utc)
+    if db_user.unlock_time:
+        # db_user.unlock_time에 시간대 정보를 추가 (만약 없을 경우)
+        if db_user.unlock_time.tzinfo is None:
+            db_user.unlock_time = db_user.unlock_time.replace(tzinfo=timezone.utc)    
     if db_user.unlock_time and db_user.unlock_time > current_time:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -64,12 +67,10 @@ async def login(user: user.SignInUser, request: Request, db: manipulation.Databa
         message = None
         if db_user.last_login_ip != ip_address:
             db_user.last_login_ip = ip_address
-            await db.update_user(db_user)
             message = "The last connected IP address and the current connected IP address are different. If your connection environment has not changed, change your password."
-
+        await db.update_user(db_user)
         # JWT 토큰 생성
         access_token = jwt_handler.create_access_token(db_user.email, db_user.nick_name)
-        await db.update_user_connection_status(db_user.id, True)
         
         return {"access_token": access_token, "token_type": "bearer", "message" : message}
 
@@ -96,7 +97,7 @@ async def update_nick(new_nick: user.UpdateNick, current_user : dict,  db: manip
     if not db_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication is required.")
 
-    if re.search(r'[!@#$%^&*]+', user.nick_name):
+    if re.search(r'[!@#$%^&*]+', new_nick.nick_name):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nickname cannot contain special characters: !@#$%^&*")
     
     existing_nick = await db.get_user_by_nick(new_nick.nick_name)
@@ -131,19 +132,14 @@ async def delete_user(user: user.DeleteUser, current_user: dict, db: manipulatio
     await db.delete_user(db_user)
     return "Account deleted"
 
-async def get_connected_users(db: manipulation.Database) -> list[user.ConnectedUser]:
-    '''
-    connected_users : User.connected == True인 User 모델 객체들의 리스트
-    user.ConnectedUser.from_orm(user): 각 user 객체를 Pydantic 모델인 ConnectedUser로 변환
-        from_orm 메서드 : 주어진 ORM 객체에서 Pydantic 모델로 데이터를 변환하는 메서드
-    '''
+async def reset_pw(user : user.Reset, db: manipulation.Database):
+    db_user = await db.get_user_by_email(user.email)
+
+
+async def get_all_users(db: manipulation.Database) -> list[dict]:
     try:
-        connected_users : list[models.User] = await db.get_connected_users()
-        # return [user.ConnectedUser.from_orm(user) for user in connected_users]
-        '''
-        The from_orm method is deprecated; set model_config['from_attributes']=True and use model_validate instead.
-        '''
-        return [user.ConnectedUser.model_validate(user_instance) for user_instance in connected_users]
+        db_users : list[models.User] = await db.get_all_users()
+        return [user.AllUser.model_validate(user_instance) for user_instance in db_users]
     except Exception as e:
         # 일반 예외 처리
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

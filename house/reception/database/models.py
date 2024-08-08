@@ -13,9 +13,7 @@ class User(Base):
     password = Column(String(255), nullable=False)
     nick_name = Column(String(255), unique=True, index=True)
     stk_size = Column(Integer, default=100)
-    connected = Column(Boolean, default=False)
     last_login_ip = Column(String(45), default=None)  # IP 주소는 최대 45자로 제한
     failed_login_attempts = Column(Integer, default=0)  
-    unlock_time = Column(DateTime, nullable=True)  # 계정 잠금 해제 시간
-
+    unlock_time = Column(DateTime(timezone=True), nullable=True)  # 계정 잠금 해제 시간
 

@@ -17,16 +17,6 @@ class Database:
         result = await self.session.execute(select(User).filter(User.nick_name == nick_name))
         return result.scalars().first()
 
-    # 이 함수를 쓰는 라우터는 아직 미구현. 관리자용
-    async def get_user_by_id(self, user_id: int):
-        result = await self.session.execute(select(User).filter(User.id == user_id))
-        return result.scalars().first()
-
-    # 이 함수를 쓰는 라우터는 아직 미구현. 관리자용
-    async def get_all_users(self):
-        result = await self.session.execute(select(User))
-        return result.scalars().all()
-
     async def create_user(self, user: User):
         self.session.add(user)
         try:
@@ -64,21 +54,9 @@ class Database:
             )
 
     # 관리자용
-    async def update_user_connection_status(self, user_id: int, status: bool):
+    async def get_all_users(self) -> list[User]:
         try:
-            await self.session.execute(update(User).where(User.id == user_id).values(connected=status))
-            await self.session.commit()
-        except IntegrityError:
-            await self.session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to update connection status."
-            )
-
-    # 관리자용
-    async def get_connected_users(self) -> list[User]:
-        try:
-            result = await self.session.execute(select(User).filter(User.connected == True))
+            result = await self.session.execute(select(User))
             return result.scalars().all()
         except SQLAlchemyError as e:
             # SQLAlchemy 관련 예외 처리
@@ -86,7 +64,12 @@ class Database:
         except Exception as e:
             # 기타 예외 처리
             raise RuntimeError(f"An unexpected error occurred: {str(e)}")
-        
+    
+        # 이 함수를 쓰는 라우터는 아직 미구현. 관리자용
+    async def get_user_by_id(self, user_id: int):
+        result = await self.session.execute(select(User).filter(User.id == user_id))
+        return result.scalars().first()
+    
     # from_floor
     async def match_nick_stk(self, nick_list: list[str]) -> dict[str, int]:
         result = await self.session.execute(select(User).filter(User.nick_name.in_(nick_list)))
