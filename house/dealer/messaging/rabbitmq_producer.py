@@ -23,8 +23,14 @@ class MessageProducer:
             self.producer_channel["channel_1"] = channel_1
             self.producer_channel["channel_2"] = channel_2
 
-            game_log_queue = await channel_1.declare_queue("table_failed", durable=True)  # to floor
-            table_failed = await channel_2.declare_queue("game_log_queue", durable=True)  # to floor
+            game_log_queue = await channel_1.declare_queue(
+                "table_failed", durable=True, 
+                arguments={"x-max-priority": 10}
+                )  # to floor
+            table_failed = await channel_2.declare_queue(
+                "game_log_queue", durable=True, 
+                arguments={"x-max-priority": 10}
+                )  # to floor
             self.producer_queues["table_failed"] = table_failed
             self.producer_queues["game_log_queue"] = game_log_queue 
             try:
