@@ -21,7 +21,9 @@ class MessageProducer:
             channel_1 = await connection.channel()
             self.producer_channel["channel_1"] = channel_1
 
-            response_agent_queue = await channel_1.declare_queue("response_agent_queue", durable=True)
+            response_agent_queue = await channel_1.declare_queue(
+                "response_agent_queue", durable=True, 
+                arguments={"x-max-priority": 10} )
             self.producer_queues["response_agent_queue"] = response_agent_queue # to floor
 
             try:

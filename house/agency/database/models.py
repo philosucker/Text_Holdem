@@ -3,11 +3,11 @@ from pydantic import BaseModel, Field
 from collections import deque
 
 
-class Agent(BaseModel):
+class AgentLog(Document):
     nick_name : str 
-    stack_size : int
-    difficulty : str 
-    available : str
+    stack_size : int 
+    difficulty : str
+    available : str 
 
 class ActionDetails(BaseModel):
     action_list: list[str] = Field(default_factory=list)
@@ -75,7 +75,7 @@ class LogUsersRanking(BaseModel):
 class FoodLog(Document):
     players: LogPlayers
     side_pots: LogSidePots
-    pot_change: list = None 
+    pot_change: list = Field(default_factory=list)
     hand_actions: LogHandActions
     community_cards: LogCommunityCards
     best_hands: LogBestHands
@@ -83,4 +83,4 @@ class FoodLog(Document):
     users_ranking: LogUsersRanking
 
     class Settings:
-        collection = "game_log"
+        collection = "food_log"

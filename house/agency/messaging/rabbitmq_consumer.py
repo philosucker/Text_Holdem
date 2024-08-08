@@ -4,8 +4,8 @@ import json
 from dotenv import load_dotenv
 import os
 from collections import deque
-from rabbitmq_producer import MessageProducer
-from database.models import Agent, FoodLog
+from messaging import rabbitmq_producer
+from database.models import AgentLog, FoodLog
 from utils import nick_name_generator, stk_size_generator
 
 # .env 파일에서 환경 변수를 로드합니다.
@@ -27,7 +27,7 @@ class MessageConsumer:
         self.agents = {}
 
     def set_producer(self, producer):
-        self.producer : MessageProducer = producer
+        self.producer : rabbitmq_producer.MessageProducer = producer
 
     async def start_consuming(self):
         connection = await aio_pika.connect_robust(RABBITMQ_SERVER_URL)
@@ -38,25 +38,22 @@ class MessageConsumer:
             await channel_2.set_qos(prefetch_count=1)
 
             request_agent_queue = await channel_1.declare_queue(
-                "request_agent_queue", 
-                durable=True,
+                "request_agent_queue", durable=True,
                 arguments={"x-max-priority": 10}  # 우선순위 큐 설정
             )
 
             request_stk_size_update_queue = await channel_1.declare_queue(
-                "request_agent_stk_size_update_queue", 
-                durable=True,
+                "request_agent_stk_size_update_queue", durable=True,
                 arguments={"x-max-priority": 10}  # 우선순위 큐 설정
             )
 
             training_data_queue = await channel_2.declare_queue(
-                "training_data_queue", 
-                durable=True,
+                "training_data_queue", durable=True,
                 arguments={"x-max-priority": 1}  # 우선순위 큐 설정
             )
 
             await request_agent_queue.consume(self.process_request_agent, no_ack=False)  # from floor
-            await request_stk_size_update_queue(self.process_stk_size_update, no_ack=False)  # from floor
+            await request_stk_size_update_queue.consume(self.process_stk_size_update, no_ack=False)  # from floor
             await training_data_queue.consume(self.process_training_data, no_ack=False)  # from floor
             
             try:
