@@ -42,12 +42,30 @@ class MessageProducer:
             self.producer_channel["channel_3"] = channel_3 # to agency
             self.producer_channel["channel_4"] = channel_4 # to agency
 
-            request_stk_size_query_queue = await channel_1.declare_queue("request_stk_size_query_queue", durable=True)
-            request_user_stk_size_update_queue = await channel_1.declare_queue("request_user_stk_size_update_queue", durable=True)
-            table_ready_queue = await channel_2.declare_queue("table_ready_queue", durable=True)
-            request_agent_queue = await channel_3.declare_queue("request_agent_queue", durable=True)
-            request_agent_stk_size_update_queue = await channel_3.declare_queue("request_agent_stk_size_update_queue", durable=True)
-            training_data_queue = await channel_4.declare_queue( "training_data_queue", durable=True)
+            request_stk_size_query_queue = await channel_1.declare_queue(
+                "request_stk_size_query_queue", durable=True, 
+                arguments={"x-max-priority": 10} 
+                )
+            request_user_stk_size_update_queue = await channel_1.declare_queue(
+                "request_user_stk_size_update_queue", durable=True, 
+                arguments={"x-max-priority": 10}
+                )
+            table_ready_queue = await channel_2.declare_queue(
+                "table_ready_queue", durable=True, 
+                arguments={"x-max-priority": 10}
+                )
+            request_agent_queue = await channel_3.declare_queue(
+                "request_agent_queue", durable=True, 
+                arguments={"x-max-priority": 10}
+                )
+            request_agent_stk_size_update_queue = await channel_3.declare_queue(
+                "request_agent_stk_size_update_queue", durable=True, 
+                arguments={"x-max-priority": 10}
+                )
+            training_data_queue = await channel_4.declare_queue( 
+                "training_data_queue", durable=True,
+                arguments={"x-max-priority": 1}
+                )
             
             self.producer_queues["request_stk_size_query_queue"] = request_stk_size_query_queue # to reception
             self.producer_queues["request_agent_queue"] = request_agent_queue # to agency

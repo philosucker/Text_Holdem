@@ -14,6 +14,7 @@ logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(app : FastAPI):
+    logging.info("Starting Floor application lifespan")
     db_client = await connection.init_db()
     app.state.db_client = db_client  # 데이터베이스 클라이언트를 애플리케이션 상태에 저장
     
@@ -28,6 +29,7 @@ async def lifespan(app : FastAPI):
     task3 = asyncio.create_task(floor_service.broadcast_table_list())
     task4 = asyncio.create_task(core_service.setting_table())
     task5 = asyncio.create_task(floor_service.broadcast_chat())
+    logging.info("All Floor tasks started successfully")
     try:
         yield
     finally:
@@ -47,14 +49,17 @@ async def lifespan(app : FastAPI):
         # except Exception as e:
         #     print(f"Error during shutdown: {e}")
 
-        tasks = [task1, task2, task3, task4, task5]
+        tasks : list[asyncio.Task] = [task1, task2, task3, task4, task5]
         for task in tasks:
             try:
-                await task
+                await task 
             except asyncio.CancelledError:
+                logging.info(f"Task {task.get_name()} cancelled successfully")
                 pass
             except Exception as e:
                 print(f"Error during shutdown: {e}")
+
+        logging.info("All Floor tasks cancelled and resources released")
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(robby_router.router)

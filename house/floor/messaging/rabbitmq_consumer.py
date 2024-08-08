@@ -59,17 +59,17 @@ class MessageConsumer:
             response_agent_queue = await channel_1.declare_queue(
                 "response_agent_queue", 
                 durable=True,
-                arguments={"x-max-priority": 1}  
+                arguments={"x-max-priority": 10}  
             )           
             table_failed_queue = await channel_2.declare_queue(
                 "table_failed", 
                 durable=True,
-                arguments={"x-max-priority": 1}  
+                arguments={"x-max-priority": 10}  
             )                    
             game_log_queue = await channel_3.declare_queue(
                 "game_log_queue", 
                 durable=True,
-                arguments={"x-max-priority": 1} 
+                arguments={"x-max-priority": 10} 
             )
 
             await response_stk_size_query_queue.consume(self.process_stk_size_query, no_ack=False) # from reception 
